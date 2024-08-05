@@ -42,6 +42,8 @@ mod typeck_root_ctxt;
 mod upvar;
 mod writeback;
 
+use core::ops::ControlFlow;
+
 pub use coercion::can_coerce;
 use fn_ctxt::FnCtxt;
 use typeck_root_ctxt::TypeckRootCtxt;
@@ -52,6 +54,7 @@ use crate::diverges::Diverges;
 use crate::expectation::Expectation;
 use crate::fn_ctxt::LoweredTy;
 use crate::gather_locals::GatherLocalsVisitor;
+use rustc_data_structures::fx::FxHashSet;
 use rustc_data_structures::unord::UnordSet;
 use rustc_errors::{codes::*, struct_span_code_err, Applicability, ErrorGuaranteed};
 use rustc_hir as hir;
@@ -62,7 +65,7 @@ use rustc_hir_analysis::check::check_abi;
 use rustc_hir_analysis::hir_ty_lowering::HirTyLowerer;
 use rustc_infer::traits::{ObligationCauseCode, ObligationInspector, WellFormedLoc};
 use rustc_middle::query::Providers;
-use rustc_middle::ty::{self, Ty, TyCtxt};
+use rustc_middle::ty::{self, Ty, TyCtxt, TypeSuperVisitable, TypeVisitable, TypeVisitor};
 use rustc_middle::{bug, span_bug};
 use rustc_session::config;
 use rustc_span::def_id::LocalDefId;
@@ -113,6 +116,41 @@ pub fn inspect_typeck<'tcx>(
 ) -> &'tcx ty::TypeckResults<'tcx> {
     let fallback = move || tcx.type_of(def_id.to_def_id()).instantiate_identity();
     typeck_with_fallback(tcx, def_id, fallback, Some(inspect))
+}
+
+struct RecursiveHasErrorVisitor<'tcx> {
+    tcx: TyCtxt<'tcx>,
+    // To avoid cycle when visiting recursive types.
+    visited_tys: FxHashSet<Ty<'tcx>>,
+}
+
+impl<'tcx> RecursiveHasErrorVisitor<'tcx> {
+    fn new(tcx: TyCtxt<'tcx>) -> Self {
+        RecursiveHasErrorVisitor { tcx, visited_tys: Default::default() }
+    }
+}
+
+impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for RecursiveHasErrorVisitor<'tcx> {
+    type Result = ControlFlow<ErrorGuaranteed>;
+
+    fn visit_ty(&mut self, t: Ty<'tcx>) -> Self::Result {
+        self.visited_tys.insert(t.clone());
+        if let ty::Adt(def, args) = t.kind() {
+            let field_tys: Vec<_> = def.all_fields().map(|f| f.ty(self.tcx, args)).collect();
+            for field_ty in field_tys {
+                if !self.visited_tys.contains(&field_ty) {
+                    // Force early return with `Break`.
+                    // Visitors don't bail by default.
+                    field_ty.visit_with(self)?;
+                }
+            }
+        }
+        t.super_visit_with(self)
+    }
+
+    fn visit_error(&mut self, guar: ErrorGuaranteed) -> Self::Result {
+        ControlFlow::Break(guar)
+    }
 }
 
 #[instrument(level = "debug", skip(tcx, fallback, inspector), ret)]
@@ -166,6 +204,11 @@ fn typeck_with_fallback<'tcx>(
         let expected_type = expected_type.unwrap_or_else(fallback);
 
         let expected_type = fcx.normalize(body.value.span, expected_type);
+
+        let mut error_visitor = RecursiveHasErrorVisitor::new(tcx);
+        if let ControlFlow::Break(guar) = expected_type.visit_with(&mut error_visitor) {
+            fcx.set_tainted_by_errors(guar);
+        }
 
         let wf_code = ObligationCauseCode::WellFormed(Some(WellFormedLoc::Ty(def_id)));
         fcx.register_wf_obligation(expected_type.into(), body.value.span, wf_code);
