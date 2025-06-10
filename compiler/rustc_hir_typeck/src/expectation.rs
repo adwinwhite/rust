@@ -47,7 +47,7 @@ impl<'a, 'tcx> Expectation<'tcx> {
         match *self {
             ExpectHasType(ety) => {
                 let ety = fcx.try_structurally_resolve_type(span, ety);
-                if !ety.is_ty_var() { ExpectHasType(ety) } else { NoExpectation }
+                ExpectHasType(ety)
             }
             ExpectRvalueLikeUnsized(ety) => ExpectRvalueLikeUnsized(ety),
             _ => NoExpectation,
