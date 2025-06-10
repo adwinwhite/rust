@@ -1,5 +1,7 @@
-use rustc_middle::ty::{self, Ty};
-use rustc_span::Span;
+use rustc_middle::ty::{
+    self, Ty, TyCtxt, TypeFoldable, TypeFolder, TypeSuperFoldable, TypeVisitableExt,
+};
+use rustc_span::{DUMMY_SP, Span};
 
 use super::Expectation::*;
 use super::FnCtxt;
@@ -34,11 +36,6 @@ impl<'a, 'tcx> Expectation<'tcx> {
     // The tightest thing we can say is "must unify with
     // else branch". Note that in the case of a "has type"
     // constraint, this limitation does not hold.
-
-    // If the expected type is just a type variable, then don't use
-    // an expected type. Otherwise, we might write parts of the type
-    // when checking the 'then' block which are incompatible with the
-    // 'else' branch.
     pub(super) fn try_structurally_resolve_and_adjust_for_branches(
         &self,
         fcx: &FnCtxt<'a, 'tcx>,
@@ -47,7 +44,7 @@ impl<'a, 'tcx> Expectation<'tcx> {
         match *self {
             ExpectHasType(ety) => {
                 let ety = fcx.try_structurally_resolve_type(span, ety);
-                if !ety.is_ty_var() { ExpectHasType(ety) } else { NoExpectation }
+                ExpectHasType(ety)
             }
             ExpectRvalueLikeUnsized(ety) => ExpectRvalueLikeUnsized(ety),
             _ => NoExpectation,
@@ -113,7 +110,48 @@ impl<'a, 'tcx> Expectation<'tcx> {
 
     /// Like `only_has_type`, but instead of returning `None` if no
     /// hard constraint exists, creates a fresh type variable.
+    ///
+    /// We replace the type variables in expected type with fresh ones.
+    /// Otherwise, the expected type will be unified with the type of the first coercion's site rather than the LUB
+    /// type.
     pub(super) fn coercion_target_type(self, fcx: &FnCtxt<'a, 'tcx>, span: Span) -> Ty<'tcx> {
-        self.only_has_type(fcx).unwrap_or_else(|| fcx.next_ty_var(span))
+        struct TyVarReplacer<'a, 'tcx> {
+            fcx: &'a FnCtxt<'a, 'tcx>,
+        }
+        impl<'a, 'tcx> TyVarReplacer<'a, 'tcx> {
+            fn new(fcx: &'a FnCtxt<'a, 'tcx>) -> Self {
+                TyVarReplacer { fcx }
+            }
+        }
+
+        impl<'a, 'tcx> TypeFolder<TyCtxt<'tcx>> for TyVarReplacer<'a, 'tcx> {
+            fn cx(&self) -> TyCtxt<'tcx> {
+                self.fcx.tcx
+            }
+
+            fn fold_ty(&mut self, ty: Ty<'tcx>) -> Ty<'tcx> {
+                let ty = self.fcx.try_structurally_resolve_type(DUMMY_SP, ty);
+                if ty.is_ty_var() {
+                    self.fcx.next_ty_var(DUMMY_SP)
+                } else if ty.has_infer() {
+                    ty.super_fold_with(self)
+                } else {
+                    ty
+                }
+            }
+        }
+        self.only_has_type(fcx)
+            .map(|ty| {
+                // Try to use the accurate span.
+                let ty = fcx.try_structurally_resolve_type(span, ty);
+                if ty.is_ty_var() {
+                    fcx.next_ty_var(span)
+                } else if ty.has_infer() {
+                    ty.fold_with(&mut TyVarReplacer::new(fcx))
+                } else {
+                    ty
+                }
+            })
+            .unwrap_or_else(|| fcx.next_ty_var(span))
     }
 }
