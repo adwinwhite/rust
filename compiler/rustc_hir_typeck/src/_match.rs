@@ -59,22 +59,16 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // type in that case)
         let mut all_arms_diverge = Diverges::WarnedAlways;
 
-        let expected =
-            orig_expected.try_structurally_resolve_and_adjust_for_branches(self, expr.span);
-        debug!(?expected);
-
-        let mut coercion = {
-            let coerce_first = match expected {
-                // We don't coerce to `()` so that if the match expression is a
-                // statement it's branches can have any consistent type. That allows
-                // us to give better error messages (pointing to a usually better
-                // arm for inconsistent arms or to the whole match when a `()` type
-                // is required).
-                Expectation::ExpectHasType(ety) if ety != tcx.types.unit => ety,
-                _ => self.next_ty_var(expr.span),
-            };
-            CoerceMany::with_coercion_sites(coerce_first, arms)
+        // We don't coerce to `()` so that if the match expression is a
+        // statement it's branches can have any consistent type. That allows
+        // us to give better error messages (pointing to a usually better
+        // arm for inconsistent arms or to the whole match when a `()` type
+        // is required).
+        let coerce_to = {
+            let to = orig_expected.coercion_target_type(self, expr.span);
+            if to == tcx.types.unit { self.next_ty_var(expr.span) } else { to }
         };
+        let mut coercion = CoerceMany::with_coercion_sites(coerce_to, arms);
 
         let mut prior_non_diverging_arms = vec![]; // Used only for diagnostics.
         let mut prior_arm = None;
@@ -94,7 +88,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             // if the guard diverges, like: `x if { loop {} } => f()`, and we
             // also want to consider the arm to diverge itself.
 
-            let arm_ty = self.check_expr_with_expectation(arm.body, expected);
+            let arm_ty = self.check_expr_with_hint(arm.body, coerce_to);
             all_arms_diverge &= self.diverges.get();
             let tail_defines_return_position_impl_trait =
                 self.return_position_impl_trait_from_match_expectation(orig_expected);

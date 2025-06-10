@@ -1793,8 +1793,12 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let element_ty = if !args.is_empty() {
             let coerce_to = expected
                 .to_option(self)
-                .and_then(|uty| self.try_structurally_resolve_type(expr.span, uty).builtin_index())
-                .unwrap_or_else(|| self.next_ty_var(expr.span));
+                .and_then(|uty| self.try_structurally_resolve_type(expr.span, uty).builtin_index());
+            let coerce_to = match coerce_to {
+                Some(ty) => Expectation::ExpectHasType(ty),
+                None => Expectation::NoExpectation,
+            };
+            let coerce_to = coerce_to.coercion_target_type(self, expr.span);
             let mut coerce = CoerceMany::with_coercion_sites(coerce_to, args);
             assert_eq!(self.diverges.get(), Diverges::Maybe);
             for e in args {
