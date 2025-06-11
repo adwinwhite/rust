@@ -54,7 +54,12 @@ use rustc_middle::ty::adjustment::{
     Adjust, Adjustment, AllowTwoPhase, AutoBorrow, AutoBorrowMutability, PointerCoercion,
 };
 use rustc_middle::ty::error::TypeError;
-use rustc_middle::ty::{self, GenericArgsRef, Ty, TyCtxt, TypeFoldable, TypeFolder, TypeVisitableExt};
+// use rustc_middle::ty::{
+    // self, GenericArgsRef, Ty, TyCtxt, TypeFoldable, TypeFolder, TypeVisitableExt,
+// };
+use rustc_middle::ty::{
+    self, GenericArgsRef, Ty, TyCtxt, TypeVisitableExt,
+};
 use rustc_span::{BytePos, DUMMY_SP, DesugaringKind, Span};
 use rustc_trait_selection::infer::InferCtxtExt as _;
 use rustc_trait_selection::traits::query::evaluate_obligation::InferCtxtExt;
@@ -1547,34 +1552,34 @@ impl<'tcx, 'exprs, E: AsCoercionSite> CoerceMany<'tcx, 'exprs, E> {
         // Handle the actual type unification etc.
         let result = if let Some(expression) = expression {
             if self.pushed == 0 {
-                struct TyVarReplacer<'a, 'tcx> {
-                    fcx: &'a FnCtxt<'a, 'tcx>,
-                }
-                impl<'a, 'tcx> TyVarReplacer<'a, 'tcx> {
-                    fn new(fcx: &'a FnCtxt<'a, 'tcx>) -> Self {
-                        TyVarReplacer { fcx }
-                    }
-                }
+                // struct TyVarReplacer<'a, 'tcx> {
+                    // fcx: &'a FnCtxt<'a, 'tcx>,
+                // }
+                // impl<'a, 'tcx> TyVarReplacer<'a, 'tcx> {
+                    // fn new(fcx: &'a FnCtxt<'a, 'tcx>) -> Self {
+                        // TyVarReplacer { fcx }
+                    // }
+                // }
 
-                impl<'a, 'tcx> TypeFolder<TyCtxt<'tcx>> for TyVarReplacer<'a, 'tcx> {
-                    fn cx(&self) -> TyCtxt<'tcx> {
-                        self.fcx.tcx
-                    }
+                // impl<'a, 'tcx> TypeFolder<TyCtxt<'tcx>> for TyVarReplacer<'a, 'tcx> {
+                    // fn cx(&self) -> TyCtxt<'tcx> {
+                        // self.fcx.tcx
+                    // }
 
-                    fn fold_ty(&mut self, ty: Ty<'tcx>) -> Ty<'tcx> {
-                        let ty = self.fcx.try_structurally_resolve_type(DUMMY_SP, ty);
-                        if ty.is_ty_var() {
-                            debug!("allocate a new ty var for expected_ty in coercion");
-                            self.fcx.next_ty_var(DUMMY_SP)
-                        } else {
-                            ty
-                        }
-                    }
-                }
+                    // fn fold_ty(&mut self, ty: Ty<'tcx>) -> Ty<'tcx> {
+                        // let ty = self.fcx.try_structurally_resolve_type(DUMMY_SP, ty);
+                        // if ty.is_ty_var() {
+                            // debug!("allocate a new ty var for expected_ty in coercion");
+                            // self.fcx.next_ty_var(DUMMY_SP)
+                        // } else {
+                            // ty
+                        // }
+                    // }
+                // }
 
                 // Avoid unifying type vars inside expected_ty in the first coercion.
                 // They should be resolved to the LUB type.
-                let expected_ty = self.expected_ty.fold_with(&mut TyVarReplacer::new(fcx));
+                // let expected_ty = self.expected_ty.fold_with(&mut TyVarReplacer::new(fcx));
 
                 // Special-case the first expression we are coercing.
                 // To be honest, I'm not entirely sure why we do this.
@@ -1582,7 +1587,7 @@ impl<'tcx, 'exprs, E: AsCoercionSite> CoerceMany<'tcx, 'exprs, E> {
                 fcx.coerce(
                     expression,
                     expression_ty,
-                    expected_ty
+                    self.expected_ty,
                     AllowTwoPhase::No,
                     Some(cause.clone()),
                 )

@@ -1,5 +1,6 @@
+use rustc_middle::ty::{TyCtxt, TypeFoldable, TypeFolder};
 use rustc_middle::ty::{self, Ty};
-use rustc_span::Span;
+use rustc_span::{Span, DUMMY_SP};
 
 use super::Expectation::*;
 use super::FnCtxt;
@@ -114,6 +115,37 @@ impl<'a, 'tcx> Expectation<'tcx> {
     /// Like `only_has_type`, but instead of returning `None` if no
     /// hard constraint exists, creates a fresh type variable.
     pub(super) fn coercion_target_type(self, fcx: &FnCtxt<'a, 'tcx>, span: Span) -> Ty<'tcx> {
-        self.only_has_type(fcx).unwrap_or_else(|| fcx.next_ty_var(span))
+        struct TyVarReplacer<'a, 'tcx> {
+            fcx: &'a FnCtxt<'a, 'tcx>,
+            origin_ty: Ty<'tcx>,
+            origin_span: Span,
+        }
+        impl<'a, 'tcx> TyVarReplacer<'a, 'tcx> {
+            fn new(fcx: &'a FnCtxt<'a, 'tcx>, origin_ty: Ty<'tcx>, origin_span: Span) -> Self {
+                TyVarReplacer { fcx, origin_ty, origin_span }
+            }
+        }
+
+        impl<'a, 'tcx> TypeFolder<TyCtxt<'tcx>> for TyVarReplacer<'a, 'tcx> {
+            fn cx(&self) -> TyCtxt<'tcx> {
+                self.fcx.tcx
+            }
+
+            fn fold_ty(&mut self, ty: Ty<'tcx>) -> Ty<'tcx> {
+                let ty = self.fcx.try_structurally_resolve_type(DUMMY_SP, ty);
+                if ty.is_ty_var() {
+                    if ty == self.origin_ty {
+                        self.fcx.next_ty_var(self.origin_span)
+                    } else {
+                        self.fcx.next_ty_var(DUMMY_SP)
+                    }
+                } else {
+                    ty
+                }
+            }
+        }
+        self.only_has_type(fcx).map(|t| t.fold_with(&mut TyVarReplacer::new(fcx, t, span))).unwrap_or_else(|| fcx.next_ty_var(span))
+
+        // self.only_has_type(fcx).unwrap_or_else(|| fcx.next_ty_var(span))
     }
 }
