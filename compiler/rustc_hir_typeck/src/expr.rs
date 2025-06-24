@@ -1332,7 +1332,10 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         self.diverges.set(Diverges::Maybe);
 
         let expected = orig_expected.try_structurally_resolve_and_adjust_for_branches(self, sp);
-        let then_ty = self.check_expr_with_expectation(then_expr, expected);
+        let coerce_to_ty = expected.coercion_target_type(self, sp);
+        let mut coerce: DynamicCoerceMany<'_> = CoerceMany::new(coerce_to_ty);
+
+        let then_ty = self.check_expr_with_hint(then_expr, coerce_to_ty);
         let then_diverges = self.diverges.get();
         self.diverges.set(Diverges::Maybe);
 
@@ -1342,13 +1345,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // `expected` if it represents a *hard* constraint
         // (`only_has_type`); otherwise, we just go with a
         // fresh type variable.
-        let coerce_to_ty = expected.coercion_target_type(self, sp);
-        let mut coerce: DynamicCoerceMany<'_> = CoerceMany::new(coerce_to_ty);
 
         coerce.coerce(self, &self.misc(sp), then_expr, then_ty);
 
         if let Some(else_expr) = opt_else_expr {
-            let else_ty = self.check_expr_with_expectation(else_expr, expected);
+            let else_ty = self.check_expr_with_hint(else_expr, coerce_to_ty);
             let else_diverges = self.diverges.get();
 
             let tail_defines_return_position_impl_trait =
