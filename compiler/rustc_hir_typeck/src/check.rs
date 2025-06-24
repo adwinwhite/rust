@@ -15,6 +15,7 @@ use tracing::{debug, instrument};
 
 use crate::coercion::CoerceMany;
 use crate::gather_locals::GatherLocalsVisitor;
+use crate::ty::adjustment::AllowTwoPhase;
 use crate::{CoroutineTypes, Diverges, FnCtxt};
 
 /// Helper used for fns and closures. Does the grungy work of checking a function
@@ -45,7 +46,7 @@ pub(super) fn check_fn<'a, 'tcx>(
         ));
 
     fcx.coroutine_types = coroutine_types;
-    fcx.ret_coercion = Some(RefCell::new(CoerceMany::new(ret_ty)));
+    fcx.ret_coercion = Some(RefCell::new(CoerceMany::new(fcx, Some(ret_ty))));
 
     let span = body.value.span;
 
@@ -148,7 +149,8 @@ pub(super) fn check_fn<'a, 'tcx>(
     // `declared_ret_ty`, but then anything uninferred would be inferred to
     // the opaque type itself. That again would cause writeback to assume
     // we have a recursive call site and do the sadly stabilized fallback to `()`.
-    fcx.demand_suptype(span, ret_ty, actual_return_ty);
+    // fcx.demand_suptype(span, ret_ty, actual_return_ty);
+    fcx.demand_coerce(body.value, actual_return_ty, ret_ty, None, AllowTwoPhase::No);
 
     // Check that a function marked as `#[panic_handler]` has signature `fn(&PanicInfo) -> !`
     if tcx.is_lang_item(fn_def_id.to_def_id(), LangItem::PanicImpl) {
