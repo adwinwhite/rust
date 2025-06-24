@@ -1342,8 +1342,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // `expected` if it represents a *hard* constraint
         // (`only_has_type`); otherwise, we just go with a
         // fresh type variable.
-        let coerce_to_ty = expected.coercion_target_type(self, sp);
-        let mut coerce: DynamicCoerceMany<'_> = CoerceMany::new(coerce_to_ty);
+        let coerce_to_ty = expected.only_has_type(self);
+        let mut coerce: DynamicCoerceMany<'_> = CoerceMany::new(self, coerce_to_ty);
 
         coerce.coerce(self, &self.misc(sp), then_expr, then_ty);
 
@@ -1563,8 +1563,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let coerce = match source {
             // you can only use break with a value from a normal `loop { }`
             hir::LoopSource::Loop => {
-                let coerce_to = expected.coercion_target_type(self, body.span);
-                Some(CoerceMany::new(coerce_to))
+                let coerce_to = expected.only_has_type(self);
+                Some(CoerceMany::new(self, coerce_to))
             }
 
             hir::LoopSource::While | hir::LoopSource::ForLoop => None,
@@ -1793,12 +1793,15 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let element_ty = if !args.is_empty() {
             let coerce_to = expected
                 .to_option(self)
-                .and_then(|uty| self.try_structurally_resolve_type(expr.span, uty).builtin_index())
-                .unwrap_or_else(|| self.next_ty_var(expr.span));
-            let mut coerce = CoerceMany::with_coercion_sites(coerce_to, args);
+                .and_then(|uty| self.try_structurally_resolve_type(expr.span, uty).builtin_index());
+            let element_expecation = match coerce_to {
+                Some(t) => Expectation::ExpectHasType(t),
+                None => Expectation::NoExpectation,
+            };
+            let mut coerce = CoerceMany::with_coercion_sites(self, coerce_to, args);
             assert_eq!(self.diverges.get(), Diverges::Maybe);
             for e in args {
-                let e_ty = self.check_expr_with_hint(e, coerce_to);
+                let e_ty = self.check_expr_with_expectation(e, element_expecation);
                 let cause = self.misc(e.span);
                 coerce.coerce(self, &cause, e, e_ty);
             }

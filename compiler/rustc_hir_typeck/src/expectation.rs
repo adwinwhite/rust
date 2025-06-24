@@ -34,11 +34,6 @@ impl<'a, 'tcx> Expectation<'tcx> {
     // The tightest thing we can say is "must unify with
     // else branch". Note that in the case of a "has type"
     // constraint, this limitation does not hold.
-
-    // If the expected type is just a type variable, then don't use
-    // an expected type. Otherwise, we might write parts of the type
-    // when checking the 'then' block which are incompatible with the
-    // 'else' branch.
     pub(super) fn try_structurally_resolve_and_adjust_for_branches(
         &self,
         fcx: &FnCtxt<'a, 'tcx>,
@@ -47,7 +42,7 @@ impl<'a, 'tcx> Expectation<'tcx> {
         match *self {
             ExpectHasType(ety) => {
                 let ety = fcx.try_structurally_resolve_type(span, ety);
-                if !ety.is_ty_var() { ExpectHasType(ety) } else { NoExpectation }
+                ExpectHasType(ety)
             }
             ExpectRvalueLikeUnsized(ety) => ExpectRvalueLikeUnsized(ety),
             _ => NoExpectation,
@@ -109,11 +104,5 @@ impl<'a, 'tcx> Expectation<'tcx> {
             ExpectHasType(ty) => Some(fcx.resolve_vars_if_possible(ty)),
             NoExpectation | ExpectCastableToType(_) | ExpectRvalueLikeUnsized(_) => None,
         }
-    }
-
-    /// Like `only_has_type`, but instead of returning `None` if no
-    /// hard constraint exists, creates a fresh type variable.
-    pub(super) fn coercion_target_type(self, fcx: &FnCtxt<'a, 'tcx>, span: Span) -> Ty<'tcx> {
-        self.only_has_type(fcx).unwrap_or_else(|| fcx.next_ty_var(span))
     }
 }

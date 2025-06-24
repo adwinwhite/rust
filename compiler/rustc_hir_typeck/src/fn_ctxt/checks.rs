@@ -1910,11 +1910,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // case we can ignore the tail expression (e.g., `'a: {
         // break 'a 22; }` would not force the type of the block
         // to be `()`).
-        let coerce_to_ty = expected.coercion_target_type(self, blk.span);
+        let coerce_to_ty = expected.only_has_type(self);
         let coerce = if blk.targeted_by_break {
-            CoerceMany::new(coerce_to_ty)
+            CoerceMany::new(self, coerce_to_ty)
         } else {
-            CoerceMany::with_coercion_sites(coerce_to_ty, blk.expr.as_slice())
+            CoerceMany::with_coercion_sites(self, coerce_to_ty, blk.expr.as_slice())
         };
 
         let prev_diverges = self.diverges.get();

@@ -59,22 +59,15 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // type in that case)
         let mut all_arms_diverge = Diverges::WarnedAlways;
 
+        // We don't coerce to `()` so that if the match expression is a
+        // statement it's branches can have any consistent type. That allows
+        // us to give better error messages (pointing to a usually better
+        // arm for inconsistent arms or to the whole match when a `()` type
+        // is required).
         let expected =
             orig_expected.try_structurally_resolve_and_adjust_for_branches(self, expr.span);
-        debug!(?expected);
-
-        let mut coercion = {
-            let coerce_first = match expected {
-                // We don't coerce to `()` so that if the match expression is a
-                // statement it's branches can have any consistent type. That allows
-                // us to give better error messages (pointing to a usually better
-                // arm for inconsistent arms or to the whole match when a `()` type
-                // is required).
-                Expectation::ExpectHasType(ety) if ety != tcx.types.unit => ety,
-                _ => self.next_ty_var(expr.span),
-            };
-            CoerceMany::with_coercion_sites(coerce_first, arms)
-        };
+        let coerce_to = expected.only_has_type(self).filter(|t| *t != tcx.types.unit);
+        let mut coercion = CoerceMany::with_coercion_sites(self, coerce_to, arms);
 
         let mut prior_non_diverging_arms = vec![]; // Used only for diagnostics.
         let mut prior_arm = None;
@@ -274,7 +267,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         if_span: Span,
         cond_expr: &'tcx hir::Expr<'tcx>,
         then_expr: &'tcx hir::Expr<'tcx>,
-        coercion: &mut CoerceMany<'tcx, '_, T>,
+        coercion: &mut CoerceMany<'tcx, T>,
     ) -> bool
     where
         T: AsCoercionSite,

@@ -185,6 +185,11 @@ impl<'f, 'tcx> Coerce<'f, 'tcx> {
         let b = self.shallow_resolve(b);
         debug!("Coerce.tys({:?} => {:?})", a, b);
 
+        // Short circuit.
+        if a == b {
+            return success(vec![], b, PredicateObligations::new());
+        }
+
         // Coercing from `!` to any type is allowed:
         if a.is_never() {
             if self.coerce_never {
@@ -1067,6 +1072,53 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         })
     }
 
+    pub(crate) fn probe_coerce(
+        &self,
+        expr: &'tcx hir::Expr<'tcx>,
+        expr_ty: Ty<'tcx>,
+        mut target: Ty<'tcx>,
+        allow_two_phase: AllowTwoPhase,
+        cause: Option<ObligationCause<'tcx>>,
+        origin_expectation: Option<Ty<'tcx>>,
+    ) -> RelateResult<'tcx, Ty<'tcx>> {
+        let source = self.try_structurally_resolve_type(expr.span, expr_ty);
+        if self.next_trait_solver() {
+            target = self.try_structurally_resolve_type(
+                cause.as_ref().map_or(expr.span, |cause| cause.span),
+                target,
+            );
+        }
+        debug!("coercion::try({:?}: {:?} -> {:?})", expr, source, target);
+
+        let cause =
+            cause.unwrap_or_else(|| self.cause(expr.span, ObligationCauseCode::ExprAssignable));
+        let coerce = Coerce::new(
+            self,
+            cause,
+            allow_two_phase,
+            self.expr_guaranteed_to_constitute_read_for_never(expr),
+        );
+        // FIXME: how about nested ty vars in expectation?
+        // HACK: if the source is never, we always prefer the target.
+        if origin_expectation.is_some_and(|t| !t.is_ty_var()) || source.is_never() {
+            let ok = self.commit_if_ok(|_| coerce.coerce(source, target))?;
+            let (adjustments, _) = self.register_infer_ok_obligations(ok);
+            self.apply_adjustments(expr, adjustments);
+            Ok(if let Err(guar) = expr_ty.error_reported() {
+                Ty::new_error(self.tcx, guar)
+            } else {
+                target
+            })
+        } else {
+            let _ok = self.probe(|_| coerce.coerce(source, target))?;
+            Ok(if let Err(guar) = expr_ty.error_reported() {
+                Ty::new_error(self.tcx, guar)
+            } else {
+                source
+            })
+        }
+    }
+
     /// Probe whether `expr_ty` can be coerced to `target_ty`. This has no side-effects,
     /// and may return false positives if types are not yet fully constrained by inference.
     ///
@@ -1399,28 +1451,29 @@ pub fn can_coerce<'tcx>(
 /// }
 /// let final_ty = coerce.complete(fcx);
 /// ```
-pub(crate) struct CoerceMany<'tcx, 'exprs, E: AsCoercionSite> {
+pub(crate) struct CoerceMany<'tcx, E: AsCoercionSite> {
+    origin_expected_ty: Option<Ty<'tcx>>,
     expected_ty: Ty<'tcx>,
     final_ty: Option<Ty<'tcx>>,
-    expressions: Expressions<'tcx, 'exprs, E>,
+    expressions: Expressions<'tcx, E>,
     pushed: usize,
 }
 
 /// The type of a `CoerceMany` that is storing up the expressions into
 /// a buffer. We use this in `check/mod.rs` for things like `break`.
-pub(crate) type DynamicCoerceMany<'tcx> = CoerceMany<'tcx, 'tcx, &'tcx hir::Expr<'tcx>>;
+pub(crate) type DynamicCoerceMany<'tcx> = CoerceMany<'tcx, &'tcx hir::Expr<'tcx>>;
 
-enum Expressions<'tcx, 'exprs, E: AsCoercionSite> {
+enum Expressions<'tcx, E: AsCoercionSite> {
     Dynamic(Vec<&'tcx hir::Expr<'tcx>>),
-    UpFront(&'exprs [E]),
+    UpFront(&'tcx [E]),
 }
 
-impl<'tcx, 'exprs, E: AsCoercionSite> CoerceMany<'tcx, 'exprs, E> {
+impl<'tcx, E: AsCoercionSite> CoerceMany<'tcx, E> {
     /// The usual case; collect the set of expressions dynamically.
     /// If the full set of coercion sites is known before hand,
     /// consider `with_coercion_sites()` instead to avoid allocation.
-    pub(crate) fn new(expected_ty: Ty<'tcx>) -> Self {
-        Self::make(expected_ty, Expressions::Dynamic(vec![]))
+    pub(crate) fn new<'a>(fcx: &FnCtxt<'a, 'tcx>, origin_expected_ty: Option<Ty<'tcx>>) -> Self {
+        Self::make(fcx, origin_expected_ty, Expressions::Dynamic(vec![]))
     }
 
     /// As an optimization, you can create a `CoerceMany` with a
@@ -1428,12 +1481,24 @@ impl<'tcx, 'exprs, E: AsCoercionSite> CoerceMany<'tcx, 'exprs, E> {
     /// expected to pass each element in the slice to `coerce(...)` in
     /// order. This is used with arrays in particular to avoid
     /// needlessly cloning the slice.
-    pub(crate) fn with_coercion_sites(expected_ty: Ty<'tcx>, coercion_sites: &'exprs [E]) -> Self {
-        Self::make(expected_ty, Expressions::UpFront(coercion_sites))
+    pub(crate) fn with_coercion_sites<'a>(
+        fcx: &FnCtxt<'a, 'tcx>,
+        origin_expected_ty: Option<Ty<'tcx>>,
+        coercion_sites: &'tcx [E],
+    ) -> Self {
+        Self::make(fcx, origin_expected_ty, Expressions::UpFront(coercion_sites))
     }
 
-    fn make(expected_ty: Ty<'tcx>, expressions: Expressions<'tcx, 'exprs, E>) -> Self {
-        CoerceMany { expected_ty, final_ty: None, expressions, pushed: 0 }
+    fn make<'a>(
+        fcx: &FnCtxt<'a, 'tcx>,
+        origin_expected_ty: Option<Ty<'tcx>>,
+        expressions: Expressions<'tcx, E>,
+    ) -> Self {
+        // TODO: use better span.
+        let origin_expected_ty =
+            origin_expected_ty.map(|t| fcx.try_structurally_resolve_type(DUMMY_SP, t));
+        let expected_ty = origin_expected_ty.unwrap_or_else(|| fcx.next_ty_var(DUMMY_SP));
+        CoerceMany { origin_expected_ty, expected_ty, final_ty: None, expressions, pushed: 0 }
     }
 
     /// Returns the "expected type" with which this coercion was
@@ -1550,12 +1615,13 @@ impl<'tcx, 'exprs, E: AsCoercionSite> CoerceMany<'tcx, 'exprs, E> {
                 // Special-case the first expression we are coercing.
                 // To be honest, I'm not entirely sure why we do this.
                 // We don't allow two-phase borrows, see comment in try_find_coercion_lub for why
-                fcx.coerce(
+                fcx.probe_coerce(
                     expression,
                     expression_ty,
                     self.expected_ty,
                     AllowTwoPhase::No,
                     Some(cause.clone()),
+                    self.origin_expected_ty,
                 )
             } else {
                 match self.expressions {
@@ -1590,17 +1656,43 @@ impl<'tcx, 'exprs, E: AsCoercionSite> CoerceMany<'tcx, 'exprs, E> {
             //
             // Another example is `break` with no argument expression.
             assert!(expression_ty.is_unit(), "if let hack without unit type");
-            fcx.at(cause, fcx.param_env)
-                .eq(
-                    // needed for tests/ui/type-alias-impl-trait/issue-65679-inst-opaque-ty-from-val-twice.rs
-                    DefineOpaqueTypes::Yes,
-                    expected,
-                    found,
-                )
-                .map(|infer_ok| {
-                    fcx.register_infer_ok_obligations(infer_ok);
-                    expression_ty
-                })
+            if expected.is_never() {
+                // adjust never expressions to unit.
+                let coerce = Coerce::new(fcx, cause.clone(), AllowTwoPhase::No, true);
+                match fcx.commit_if_ok(|_| coerce.coerce(expected, expression_ty)) {
+                    Err(_) => unreachable!(),
+                    Ok(ok) => {
+                        let (adjustments, target) = fcx.register_infer_ok_obligations(ok);
+                        match self.expressions {
+                            Expressions::Dynamic(ref exprs) => {
+                                for expr in exprs {
+                                    fcx.apply_adjustments(expr, adjustments.clone());
+                                }
+                            }
+                            Expressions::UpFront(coercion_sites) => {
+                                let exprs = &coercion_sites[0..self.pushed];
+                                for expr in exprs {
+                                    let expr = expr.as_coercion_site();
+                                    fcx.apply_adjustments(expr, adjustments.clone());
+                                }
+                            }
+                        };
+                        Ok(target)
+                    }
+                }
+            } else {
+                fcx.at(cause, fcx.param_env)
+                    .eq(
+                        // needed for tests/ui/type-alias-impl-trait/issue-65679-inst-opaque-ty-from-val-twice.rs
+                        DefineOpaqueTypes::Yes,
+                        expected,
+                        found,
+                    )
+                    .map(|infer_ok| {
+                        fcx.register_infer_ok_obligations(infer_ok);
+                        expression_ty
+                    })
+            }
         };
 
         debug!(?result);
