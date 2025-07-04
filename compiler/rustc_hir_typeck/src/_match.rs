@@ -274,7 +274,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         if_span: Span,
         cond_expr: &'tcx hir::Expr<'tcx>,
         then_expr: &'tcx hir::Expr<'tcx>,
-        coercion: &mut CoerceMany<'tcx, '_, T>,
+        coercion: &mut CoerceMany<'tcx, T>,
     ) -> bool
     where
         T: AsCoercionSite,

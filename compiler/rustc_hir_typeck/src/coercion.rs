@@ -67,6 +67,7 @@ use tracing::{debug, instrument};
 use crate::FnCtxt;
 use crate::errors::SuggestBoxingForReturnImplTrait;
 
+#[derive(Clone)]
 struct Coerce<'a, 'tcx> {
     fcx: &'a FnCtxt<'a, 'tcx>,
     cause: ObligationCause<'tcx>,
@@ -184,6 +185,15 @@ impl<'f, 'tcx> Coerce<'f, 'tcx> {
         let a = self.shallow_resolve(a);
         let b = self.shallow_resolve(b);
         debug!("Coerce.tys({:?} => {:?})", a, b);
+
+        // Short circuit.
+        if a == b {
+            return success(
+                vec![],
+                b,
+                PredicateObligations::new(),
+            );
+        }
 
         // Coercing from `!` to any type is allowed:
         if a.is_never() {
@@ -1026,6 +1036,39 @@ impl<'f, 'tcx> Coerce<'f, 'tcx> {
     }
 }
 
+// FIXME: too special and too many allocations?
+#[derive(Clone)]
+enum TupleAdjustment<'tcx> {
+    Whole(Vec<Adjustment<'tcx>>),
+    Fields(Vec<TupleAdjustment<'tcx>>),
+}
+
+impl<'tcx> TupleAdjustment<'tcx> {
+    fn apply<'a>(self, fcx: &FnCtxt<'a, 'tcx>, exprs: impl IntoIterator<Item = &'tcx hir::Expr<'tcx>>) {
+        match self {
+            TupleAdjustment::Whole(adjustments) => {
+                for expr in exprs {
+                    fcx.apply_adjustments(expr, adjustments.clone());
+                }
+            },
+            TupleAdjustment::Fields(field_adjs) => {
+                for expr in exprs {
+                    let hir::ExprKind::Tup(field_exprs) = expr.kind else {
+                        unreachable!()
+                    };
+                    for (field_expr, field_adj) in field_exprs.iter().zip(field_adjs.clone()) {
+                        field_adj.apply(fcx, std::iter::once(field_expr));
+                    }
+                }
+            },
+        }
+    }
+
+}
+
+type TupleCoerceResult<'tcx> = InferResult<'tcx, (TupleAdjustment<'tcx>, Ty<'tcx>)>;
+
+
 impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     /// Attempt to coerce an expression to a type, and return the
     /// adjusted type of the expression, if successful.
@@ -1056,10 +1099,15 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             allow_two_phase,
             self.expr_guaranteed_to_constitute_read_for_never(expr),
         );
-        let ok = self.commit_if_ok(|_| coerce.coerce(source, target))?;
+        // let ok = self.commit_if_ok(|_| coerce.coerce(source, target))?;
+        // let ok = self
+        let ok = self
+            .commit_if_ok(|_| self.tuple_coerce(coerce, std::iter::once(expr), source, target))?;
+        let (adjustments, target) = self.register_infer_ok_obligations(ok);
+        adjustments.apply(self, std::iter::once(expr));
 
-        let (adjustments, _) = self.register_infer_ok_obligations(ok);
-        self.apply_adjustments(expr, adjustments);
+        // let (adjustments, _) = self.register_infer_ok_obligations(ok);
+        // self.apply_adjustments(expr, adjustments);
         Ok(if let Err(guar) = expr_ty.error_reported() {
             Ty::new_error(self.tcx, guar)
         } else {
@@ -1149,24 +1197,22 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     ///
     /// This is really an internal helper. From outside the coercion
     /// module, you should instantiate a `CoerceMany` instance.
-    fn try_find_coercion_lub<E>(
+    fn try_find_coercion_lub(
         &self,
         cause: &ObligationCause<'tcx>,
-        exprs: &[E],
+        exprs: impl IntoIterator<Item = &'tcx hir::Expr<'tcx>> + Clone,
         prev_ty: Ty<'tcx>,
-        new: &hir::Expr<'_>,
+        new: &'tcx hir::Expr<'tcx>,
         new_ty: Ty<'tcx>,
     ) -> RelateResult<'tcx, Ty<'tcx>>
-    where
-        E: AsCoercionSite,
     {
         let prev_ty = self.try_structurally_resolve_type(cause.span, prev_ty);
         let new_ty = self.try_structurally_resolve_type(new.span, new_ty);
         debug!(
-            "coercion::try_find_coercion_lub({:?}, {:?}, exprs={:?} exprs)",
+            "coercion::try_find_coercion_lub({:?}, {:?})",
             prev_ty,
             new_ty,
-            exprs.len()
+            // exprs.len()
         );
 
         // The following check fixes #88097, where the compiler erroneously
@@ -1277,7 +1323,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 ty::FnDef(..) => Adjust::Pointer(PointerCoercion::ReifyFnPointer),
                 _ => span_bug!(new.span, "should not try to coerce a {new_ty} to a fn pointer"),
             };
-            for expr in exprs.iter().map(|e| e.as_coercion_site()) {
+            for expr in exprs {
                 self.apply_adjustments(
                     expr,
                     vec![Adjustment { kind: prev_adjustment.clone(), target: fn_ptr }],
@@ -1302,11 +1348,15 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // but only if the new expression has no coercion already applied to it.
         let mut first_error = None;
         if !self.typeck_results.borrow().adjustments().contains_key(new.hir_id) {
-            let result = self.commit_if_ok(|_| coerce.coerce(new_ty, prev_ty));
+            // let result = self.commit_if_ok(|_| coerce.coerce(new_ty, prev_ty));
+            let result = self
+                .commit_if_ok(|_| self.tuple_coerce(coerce.clone(), std::iter::once(new), new_ty, prev_ty));
             match result {
+                // Ok(ok) => {
                 Ok(ok) => {
                     let (adjustments, target) = self.register_infer_ok_obligations(ok);
-                    self.apply_adjustments(new, adjustments);
+                    adjustments.apply(self, std::iter::once(new));
+                    // self.apply_adjustments(new, adjustments);
                     debug!(
                         "coercion::try_find_coercion_lub: was able to coerce from new type {:?} to previous type {:?} ({:?})",
                         new_ty, prev_ty, target
@@ -1317,7 +1367,10 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             }
         }
 
-        match self.commit_if_ok(|_| coerce.coerce(prev_ty, new_ty)) {
+        // match self.commit_if_ok(|_| coerce.coerce(prev_ty, new_ty)) {
+        match self.commit_if_ok(|_| {
+            self.tuple_coerce(coerce, exprs.clone(), prev_ty, new_ty)
+        }) {
             Err(_) => {
                 // Avoid giving strange errors on failed attempts.
                 if let Some(e) = first_error {
@@ -1328,18 +1381,76 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         .unwrap_err())
                 }
             }
+            // Ok(ok) => {
             Ok(ok) => {
                 let (adjustments, target) = self.register_infer_ok_obligations(ok);
-                for expr in exprs {
-                    let expr = expr.as_coercion_site();
-                    self.apply_adjustments(expr, adjustments.clone());
-                }
+                adjustments.apply(self, exprs);
+                // for expr in exprs {
+                // let expr = expr.as_coercion_site();
+                // self.apply_adjustments(expr, adjustments.clone());
+                // }
                 debug!(
                     "coercion::try_find_coercion_lub: was able to coerce previous type {:?} to new type {:?} ({:?})",
                     prev_ty, new_ty, target
                 );
                 Ok(target)
             }
+        }
+    }
+
+    // TODO: do not specialize tuple.
+    fn tuple_coerce<E>(
+        &self,
+        coercer: Coerce<'a, 'tcx>,
+        exprs: E,
+        source: Ty<'tcx>,
+        target: Ty<'tcx>,
+    ) -> TupleCoerceResult<'tcx>
+        where E: IntoIterator<Item = &'tcx hir::Expr<'tcx>> + Clone
+    {
+        let mut exprs_iter = exprs.clone().into_iter();
+        let exprs = exprs.into_iter();
+        // FIXME: It is necessary to check length equality?
+        // FIXME: avoid duplicate iteration.
+        if let crate::ty::Tuple(source_tys) = source.kind()
+            && let crate::ty::Tuple(target_tys) = target.kind()
+                && exprs_iter.all(|e| matches!(e.kind, crate::hir::ExprKind::Tup(_)))
+        {
+            let expr_pot: Vec<_> = exprs.map(|e| {
+                let crate::hir::ExprKind::Tup(els) = e.kind else { unreachable!() };
+                els
+            }).collect();
+            fn mk_viewer<'tcx>(expr_pot: &Vec<&'tcx [hir::Expr<'tcx>]>, i: usize) -> impl Iterator<Item = &'tcx hir::Expr<'tcx>> + Clone {
+                expr_pot.iter().map(move |els| &els[i])
+            }
+            let (adjs, tys, obligations) = source_tys
+                .iter()
+                .zip(*target_tys)
+                .enumerate()
+                .map(|(i, (sub_source, sub_target))| {
+                    let sub_exprs = mk_viewer(&expr_pot, i);
+                    let tuple_ok = self.tuple_coerce(coercer.clone(), sub_exprs, sub_source, sub_target)?;
+                    Ok((tuple_ok.value.0, tuple_ok.value.1, tuple_ok.obligations))
+                })
+                .collect::<Result<(Vec<_>, Vec<_>, Vec<_>), _>>()?;
+            let tuple_ty = Ty::new_tup(self.tcx, &tys[..]);
+            Ok(InferOk {
+                value: (TupleAdjustment::Fields(adjs), tuple_ty),
+                // TODO: avoid allocation.
+                obligations: obligations.into_iter().flatten().collect(),
+            })
+        } else {
+            let ok = self.commit_if_ok(|_| coercer.coerce(source, target))?;
+            let ok = InferOk {
+                value: (TupleAdjustment::Whole(ok.value.0), ok.value.1),
+                obligations: ok.obligations,
+            };
+            // let (adjustments, target) = self.register_infer_ok_obligations(ok);
+            // for expr in exprs {
+                // // let expr = expr.as_coercion_site();
+                // self.apply_adjustments(expr, adjustments.clone());
+            // }
+            Ok(ok)
         }
     }
 }
@@ -1399,23 +1510,23 @@ pub fn can_coerce<'tcx>(
 /// }
 /// let final_ty = coerce.complete(fcx);
 /// ```
-pub(crate) struct CoerceMany<'tcx, 'exprs, E: AsCoercionSite> {
+pub(crate) struct CoerceMany<'tcx, E: AsCoercionSite> {
     expected_ty: Ty<'tcx>,
     final_ty: Option<Ty<'tcx>>,
-    expressions: Expressions<'tcx, 'exprs, E>,
+    expressions: Expressions<'tcx, E>,
     pushed: usize,
 }
 
 /// The type of a `CoerceMany` that is storing up the expressions into
 /// a buffer. We use this in `check/mod.rs` for things like `break`.
-pub(crate) type DynamicCoerceMany<'tcx> = CoerceMany<'tcx, 'tcx, &'tcx hir::Expr<'tcx>>;
+pub(crate) type DynamicCoerceMany<'tcx> = CoerceMany<'tcx, &'tcx hir::Expr<'tcx>>;
 
-enum Expressions<'tcx, 'exprs, E: AsCoercionSite> {
+enum Expressions<'tcx, E: AsCoercionSite> {
     Dynamic(Vec<&'tcx hir::Expr<'tcx>>),
-    UpFront(&'exprs [E]),
+    UpFront(&'tcx [E]),
 }
 
-impl<'tcx, 'exprs, E: AsCoercionSite> CoerceMany<'tcx, 'exprs, E> {
+impl<'tcx, E: AsCoercionSite> CoerceMany<'tcx, E> {
     /// The usual case; collect the set of expressions dynamically.
     /// If the full set of coercion sites is known before hand,
     /// consider `with_coercion_sites()` instead to avoid allocation.
@@ -1428,11 +1539,11 @@ impl<'tcx, 'exprs, E: AsCoercionSite> CoerceMany<'tcx, 'exprs, E> {
     /// expected to pass each element in the slice to `coerce(...)` in
     /// order. This is used with arrays in particular to avoid
     /// needlessly cloning the slice.
-    pub(crate) fn with_coercion_sites(expected_ty: Ty<'tcx>, coercion_sites: &'exprs [E]) -> Self {
+    pub(crate) fn with_coercion_sites(expected_ty: Ty<'tcx>, coercion_sites: &'tcx [E]) -> Self {
         Self::make(expected_ty, Expressions::UpFront(coercion_sites))
     }
 
-    fn make(expected_ty: Ty<'tcx>, expressions: Expressions<'tcx, 'exprs, E>) -> Self {
+    fn make(expected_ty: Ty<'tcx>, expressions: Expressions<'tcx, E>) -> Self {
         CoerceMany { expected_ty, final_ty: None, expressions, pushed: 0 }
     }
 
@@ -1561,14 +1672,14 @@ impl<'tcx, 'exprs, E: AsCoercionSite> CoerceMany<'tcx, 'exprs, E> {
                 match self.expressions {
                     Expressions::Dynamic(ref exprs) => fcx.try_find_coercion_lub(
                         cause,
-                        exprs,
+                        exprs.iter().map(|e| (*e).as_coercion_site()),
                         self.merged_ty(),
                         expression,
                         expression_ty,
                     ),
                     Expressions::UpFront(coercion_sites) => fcx.try_find_coercion_lub(
                         cause,
-                        &coercion_sites[0..self.pushed],
+                        coercion_sites[0..self.pushed].iter().map(|e| e.as_coercion_site()),
                         self.merged_ty(),
                         expression,
                         expression_ty,
