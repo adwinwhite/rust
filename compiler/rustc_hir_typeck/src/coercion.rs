@@ -93,7 +93,9 @@ impl<'a, 'tcx> Deref for Coerce<'a, 'tcx> {
     }
 }
 
-type CoerceResult<'tcx> = InferResult<'tcx, (Vec<Adjustment<'tcx>>, Ty<'tcx>)>;
+// TODO: profile and try smallvec or thinvec.
+type CoerceResult<'tcx> =
+    InferResult<'tcx, ((Vec<Adjustment<'tcx>>, Vec<Adjustment<'tcx>>), Ty<'tcx>)>;
 
 /// Coercing a mutable reference to an immutable works, while
 /// coercing `&T` to `&mut T` should be forbidden.
@@ -110,7 +112,7 @@ fn success<'tcx>(
     target: Ty<'tcx>,
     obligations: PredicateObligations<'tcx>,
 ) -> CoerceResult<'tcx> {
-    Ok(InferOk { value: (adj, target), obligations })
+    Ok(InferOk { value: ((adj, vec![]), target), obligations })
 }
 
 impl<'f, 'tcx> Coerce<'f, 'tcx> {
@@ -202,6 +204,114 @@ impl<'f, 'tcx> Coerce<'f, 'tcx> {
             } else {
                 // Otherwise the only coercion we can do is unification.
                 return self.unify(a, b);
+            }
+        }
+
+        if self.use_lub {
+            // Special-case that coercion alone cannot handle:
+            // Function items or non-capturing closures of differing IDs or GenericArgs.
+            let (a_sig, b_sig) =
+                {
+                    let is_capturing_closure = |ty: Ty<'tcx>| {
+                        if let &ty::Closure(closure_def_id, _args) = ty.kind() {
+                            self.tcx.upvars_mentioned(closure_def_id.expect_local()).is_some()
+                        } else {
+                            false
+                        }
+                    };
+                    if is_capturing_closure(a) || is_capturing_closure(b) {
+                        (None, None)
+                    } else {
+                        match (a.kind(), b.kind()) {
+                            (ty::FnDef(..), ty::FnDef(..)) => {
+                                // Don't reify if the function types have a LUB, i.e., they
+                                // are the same function and their parameters have a LUB.
+                                match self.commit_if_ok(|_| {
+                                    // We need to eagerly handle nested obligations due to lazy norm.
+                                    if self.next_trait_solver() {
+                                        let ocx = ObligationCtxt::new(self);
+                                        let value = ocx.lub(&self.cause, self.param_env, a, b)?;
+                                        if ocx.select_where_possible().is_empty() {
+                                            Ok(InferOk {
+                                                value,
+                                                obligations: ocx.into_pending_obligations(),
+                                            })
+                                        } else {
+                                            Err(TypeError::Mismatch)
+                                        }
+                                    } else {
+                                        self.at(&self.cause, self.param_env).lub(a, b)
+                                    }
+                                }) {
+                                    // We have a LUB of prev_ty and new_ty, just return it.
+                                    Ok(ok) => return success(vec![], ok.value, ok.obligations),
+                                    Err(_) => (Some(a.fn_sig(self.tcx)), Some(b.fn_sig(self.tcx))),
+                                }
+                            }
+                            (ty::Closure(_, args), ty::FnDef(..)) => {
+                                let b_sig = b.fn_sig(self.tcx);
+                                let a_sig = self
+                                    .tcx
+                                    .signature_unclosure(args.as_closure().sig(), b_sig.safety());
+                                (Some(a_sig), Some(b_sig))
+                            }
+                            (ty::FnDef(..), ty::Closure(_, args)) => {
+                                let a_sig = a.fn_sig(self.tcx);
+                                let b_sig = self
+                                    .tcx
+                                    .signature_unclosure(args.as_closure().sig(), a_sig.safety());
+                                (Some(a_sig), Some(b_sig))
+                            }
+                            (ty::Closure(_, args_a), ty::Closure(_, args_b)) => (
+                                Some(self.tcx.signature_unclosure(
+                                    args_a.as_closure().sig(),
+                                    hir::Safety::Safe,
+                                )),
+                                Some(self.tcx.signature_unclosure(
+                                    args_b.as_closure().sig(),
+                                    hir::Safety::Safe,
+                                )),
+                            ),
+                            _ => (None, None),
+                        }
+                    }
+                };
+            if let (Some(a_sig), Some(b_sig)) = (a_sig, b_sig) {
+                // The signature must match.
+                let (a_sig, b_sig) = self.normalize(self.cause.span, (a_sig, b_sig));
+                let InferOk { value: sig, obligations } =
+                    self.at(&self.cause, self.param_env).lub(a_sig, b_sig)?;
+
+                // Reify both sides and return the reified fn pointer type.
+                let fn_ptr = Ty::new_fn_ptr(self.tcx, sig);
+                let prev_adjustment = match a.kind() {
+                    ty::Closure(..) => {
+                        Adjust::Pointer(PointerCoercion::ClosureFnPointer(a_sig.safety()))
+                    }
+                    ty::FnDef(..) => Adjust::Pointer(PointerCoercion::ReifyFnPointer),
+                    _ => {
+                        span_bug!(self.cause.span, "should not try to coerce a {a} to a fn pointer")
+                    }
+                };
+                let next_adjustment = match b.kind() {
+                    ty::Closure(..) => {
+                        Adjust::Pointer(PointerCoercion::ClosureFnPointer(b_sig.safety()))
+                    }
+                    ty::FnDef(..) => Adjust::Pointer(PointerCoercion::ReifyFnPointer),
+                    _ => {
+                        span_bug!(self.cause.span, "should not try to coerce a {b} to a fn pointer")
+                    }
+                };
+                return Ok(InferOk {
+                    value: (
+                        (
+                            vec![Adjustment { kind: prev_adjustment.clone(), target: fn_ptr }],
+                            vec![Adjustment { kind: next_adjustment, target: fn_ptr }],
+                        ),
+                        fn_ptr,
+                    ),
+                    obligations,
+                });
             }
         }
 
@@ -773,13 +883,11 @@ impl<'f, 'tcx> Coerce<'f, 'tcx> {
             ])
             .collect();
 
-        Ok(InferOk {
-            value: (
-                vec![Adjustment { kind: Adjust::Pointer(PointerCoercion::DynStar), target: b }],
-                b,
-            ),
+        success(
+            vec![Adjustment { kind: Adjust::Pointer(PointerCoercion::DynStar), target: b }],
+            b,
             obligations,
-        })
+        )
     }
 
     /// Applies reborrowing for `Pin`
@@ -1040,30 +1148,32 @@ enum TupleAdjustment<'tcx> {
 }
 
 impl<'tcx> TupleAdjustment<'tcx> {
-    fn apply<'a>(self, fcx: &FnCtxt<'a, 'tcx>, exprs: impl IntoIterator<Item = &'tcx hir::Expr<'tcx>>) {
+    fn apply<'a>(
+        self,
+        fcx: &FnCtxt<'a, 'tcx>,
+        exprs: impl IntoIterator<Item = &'tcx hir::Expr<'tcx>>,
+    ) {
         match self {
             TupleAdjustment::Whole(adjustments) => {
                 for expr in exprs {
                     fcx.apply_adjustments(expr, adjustments.clone());
                 }
-            },
+            }
             TupleAdjustment::Fields(field_adjs) => {
                 for expr in exprs {
-                    let hir::ExprKind::Tup(field_exprs) = expr.kind else {
-                        unreachable!()
-                    };
+                    let hir::ExprKind::Tup(field_exprs) = expr.kind else { unreachable!() };
                     for (field_expr, field_adj) in field_exprs.iter().zip(field_adjs.clone()) {
                         field_adj.apply(fcx, std::iter::once(field_expr));
                     }
                 }
-            },
+            }
         }
     }
-
 }
 
-type TupleCoerceResult<'tcx> = InferResult<'tcx, (TupleAdjustment<'tcx>, Ty<'tcx>)>;
-
+// TODO: optimize size.
+type TupleCoerceResult<'tcx> =
+    InferResult<'tcx, ((TupleAdjustment<'tcx>, TupleAdjustment<'tcx>), Ty<'tcx>)>;
 
 impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     /// Attempt to coerce an expression to a type, and return the
@@ -1097,9 +1207,10 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         );
         // let ok = self.commit_if_ok(|_| coerce.coerce(source, target))?;
         // let ok = self
-        let ok = self
-            .commit_if_ok(|_| self.tuple_coerce(coerce, std::iter::once(expr), source, target))?;
-        let (adjustments, target) = self.register_infer_ok_obligations(ok);
+        let ok = self.commit_if_ok(|_| {
+            self.tuple_coerce(coerce, std::iter::once(expr), std::iter::empty(), source, target)
+        })?;
+        let ((adjustments, _), target) = self.register_infer_ok_obligations(ok);
         adjustments.apply(self, std::iter::once(expr));
 
         // let (adjustments, _) = self.register_infer_ok_obligations(ok);
@@ -1141,7 +1252,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // HACK: if the source is never, we always prefer the target.
         if origin_expectation.is_some_and(|t| !t.is_ty_var()) || source.is_never() {
             let ok = self.commit_if_ok(|_| coerce.coerce(source, target))?;
-            let (adjustments, _) = self.register_infer_ok_obligations(ok);
+            let ((adjustments, _), _) = self.register_infer_ok_obligations(ok);
             self.apply_adjustments(expr, adjustments);
             Ok(if let Err(guar) = expr_ty.error_reported() {
                 Ty::new_error(self.tcx, guar)
@@ -1247,8 +1358,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         prev_ty: Ty<'tcx>,
         new: &'tcx hir::Expr<'tcx>,
         new_ty: Ty<'tcx>,
-    ) -> RelateResult<'tcx, Ty<'tcx>>
-    {
+    ) -> RelateResult<'tcx, Ty<'tcx>> {
         let prev_ty = self.try_structurally_resolve_type(cause.span, prev_ty);
         let new_ty = self.try_structurally_resolve_type(new.span, new_ty);
         debug!(
@@ -1275,107 +1385,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             return Err(TypeError::ForceInlineCast);
         }
 
-        // Special-case that coercion alone cannot handle:
-        // Function items or non-capturing closures of differing IDs or GenericArgs.
-        let (a_sig, b_sig) = {
-            let is_capturing_closure = |ty: Ty<'tcx>| {
-                if let &ty::Closure(closure_def_id, _args) = ty.kind() {
-                    self.tcx.upvars_mentioned(closure_def_id.expect_local()).is_some()
-                } else {
-                    false
-                }
-            };
-            if is_capturing_closure(prev_ty) || is_capturing_closure(new_ty) {
-                (None, None)
-            } else {
-                match (prev_ty.kind(), new_ty.kind()) {
-                    (ty::FnDef(..), ty::FnDef(..)) => {
-                        // Don't reify if the function types have a LUB, i.e., they
-                        // are the same function and their parameters have a LUB.
-                        match self.commit_if_ok(|_| {
-                            // We need to eagerly handle nested obligations due to lazy norm.
-                            if self.next_trait_solver() {
-                                let ocx = ObligationCtxt::new(self);
-                                let value = ocx.lub(cause, self.param_env, prev_ty, new_ty)?;
-                                if ocx.select_where_possible().is_empty() {
-                                    Ok(InferOk {
-                                        value,
-                                        obligations: ocx.into_pending_obligations(),
-                                    })
-                                } else {
-                                    Err(TypeError::Mismatch)
-                                }
-                            } else {
-                                self.at(cause, self.param_env).lub(prev_ty, new_ty)
-                            }
-                        }) {
-                            // We have a LUB of prev_ty and new_ty, just return it.
-                            Ok(ok) => return Ok(self.register_infer_ok_obligations(ok)),
-                            Err(_) => {
-                                (Some(prev_ty.fn_sig(self.tcx)), Some(new_ty.fn_sig(self.tcx)))
-                            }
-                        }
-                    }
-                    (ty::Closure(_, args), ty::FnDef(..)) => {
-                        let b_sig = new_ty.fn_sig(self.tcx);
-                        let a_sig =
-                            self.tcx.signature_unclosure(args.as_closure().sig(), b_sig.safety());
-                        (Some(a_sig), Some(b_sig))
-                    }
-                    (ty::FnDef(..), ty::Closure(_, args)) => {
-                        let a_sig = prev_ty.fn_sig(self.tcx);
-                        let b_sig =
-                            self.tcx.signature_unclosure(args.as_closure().sig(), a_sig.safety());
-                        (Some(a_sig), Some(b_sig))
-                    }
-                    (ty::Closure(_, args_a), ty::Closure(_, args_b)) => (
-                        Some(
-                            self.tcx
-                                .signature_unclosure(args_a.as_closure().sig(), hir::Safety::Safe),
-                        ),
-                        Some(
-                            self.tcx
-                                .signature_unclosure(args_b.as_closure().sig(), hir::Safety::Safe),
-                        ),
-                    ),
-                    _ => (None, None),
-                }
-            }
-        };
-        if let (Some(a_sig), Some(b_sig)) = (a_sig, b_sig) {
-            // The signature must match.
-            let (a_sig, b_sig) = self.normalize(new.span, (a_sig, b_sig));
-            let sig = self
-                .at(cause, self.param_env)
-                .lub(a_sig, b_sig)
-                .map(|ok| self.register_infer_ok_obligations(ok))?;
-
-            // Reify both sides and return the reified fn pointer type.
-            let fn_ptr = Ty::new_fn_ptr(self.tcx, sig);
-            let prev_adjustment = match prev_ty.kind() {
-                ty::Closure(..) => {
-                    Adjust::Pointer(PointerCoercion::ClosureFnPointer(a_sig.safety()))
-                }
-                ty::FnDef(..) => Adjust::Pointer(PointerCoercion::ReifyFnPointer),
-                _ => span_bug!(cause.span, "should not try to coerce a {prev_ty} to a fn pointer"),
-            };
-            let next_adjustment = match new_ty.kind() {
-                ty::Closure(..) => {
-                    Adjust::Pointer(PointerCoercion::ClosureFnPointer(b_sig.safety()))
-                }
-                ty::FnDef(..) => Adjust::Pointer(PointerCoercion::ReifyFnPointer),
-                _ => span_bug!(new.span, "should not try to coerce a {new_ty} to a fn pointer"),
-            };
-            for expr in exprs {
-                self.apply_adjustments(
-                    expr,
-                    vec![Adjustment { kind: prev_adjustment.clone(), target: fn_ptr }],
-                );
-            }
-            self.apply_adjustments(new, vec![Adjustment { kind: next_adjustment, target: fn_ptr }]);
-            return Ok(fn_ptr);
-        }
-
         // Configure a Coerce instance to compute the LUB.
         // We don't allow two-phase borrows on any autorefs this creates since we
         // probably aren't processing function arguments here and even if we were,
@@ -1392,14 +1401,22 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let mut first_error = None;
         if !self.typeck_results.borrow().adjustments().contains_key(new.hir_id) {
             // let result = self.commit_if_ok(|_| coerce.coerce(new_ty, prev_ty));
-            let result = self
-                .commit_if_ok(|_| self.tuple_coerce(coerce.clone(), std::iter::once(new), new_ty, prev_ty));
+            let result = self.commit_if_ok(|_| {
+                self.tuple_coerce(
+                    coerce.clone(),
+                    std::iter::once(new),
+                    exprs.clone(),
+                    new_ty,
+                    prev_ty,
+                )
+            });
             match result {
                 // Ok(ok) => {
                 Ok(ok) => {
-                    let (adjustments, target) = self.register_infer_ok_obligations(ok);
-                    adjustments.apply(self, std::iter::once(new));
-                    // self.apply_adjustments(new, adjustments);
+                    let ((new_adjustments, prev_adjustments), target) =
+                        self.register_infer_ok_obligations(ok);
+                    new_adjustments.apply(self, std::iter::once(new));
+                    prev_adjustments.apply(self, exprs);
                     debug!(
                         "coercion::try_find_coercion_lub: was able to coerce from new type {:?} to previous type {:?} ({:?})",
                         new_ty, prev_ty, target
@@ -1412,7 +1429,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
         // match self.commit_if_ok(|_| coerce.coerce(prev_ty, new_ty)) {
         match self.commit_if_ok(|_| {
-            self.tuple_coerce(coerce, exprs.clone(), prev_ty, new_ty)
+            self.tuple_coerce(coerce, exprs.clone(), std::iter::once(new), prev_ty, new_ty)
         }) {
             Err(_) => {
                 // Avoid giving strange errors on failed attempts.
@@ -1426,8 +1443,10 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             }
             // Ok(ok) => {
             Ok(ok) => {
-                let (adjustments, target) = self.register_infer_ok_obligations(ok);
-                adjustments.apply(self, exprs);
+                let ((prev_adjustments, new_adjustments), target) =
+                    self.register_infer_ok_obligations(ok);
+                prev_adjustments.apply(self, exprs);
+                new_adjustments.apply(self, std::iter::once(new));
                 // for expr in exprs {
                 // let expr = expr.as_coercion_site();
                 // self.apply_adjustments(expr, adjustments.clone());
@@ -1445,53 +1464,91 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     fn tuple_coerce<E>(
         &self,
         coercer: Coerce<'a, 'tcx>,
-        exprs: E,
+        source_exprs: E,
+        target_exprs: impl IntoIterator<Item = &'tcx hir::Expr<'tcx>> + Clone,
         source: Ty<'tcx>,
         target: Ty<'tcx>,
     ) -> TupleCoerceResult<'tcx>
-        where E: IntoIterator<Item = &'tcx hir::Expr<'tcx>> + Clone
+    where
+        E: IntoIterator<Item = &'tcx hir::Expr<'tcx>> + Clone,
     {
-        let mut exprs_iter = exprs.clone().into_iter();
-        let exprs = exprs.into_iter();
+        let mut source_exprs_iter = source_exprs.clone().into_iter();
+        let source_exprs = source_exprs.into_iter();
+        let mut target_exprs_iter = target_exprs.clone().into_iter();
+        let target_exprs = target_exprs.into_iter();
         // FIXME: It is necessary to check length equality?
         // FIXME: avoid duplicate iteration.
         if let crate::ty::Tuple(source_tys) = source.kind()
             && let crate::ty::Tuple(target_tys) = target.kind()
-                && exprs_iter.all(|e| matches!(e.kind, crate::hir::ExprKind::Tup(_)))
+            && source_exprs_iter.all(|e| matches!(e.kind, crate::hir::ExprKind::Tup(_)))
+            && target_exprs_iter.all(|e| matches!(e.kind, crate::hir::ExprKind::Tup(_)))
         {
-            let expr_pot: Vec<_> = exprs.map(|e| {
-                let crate::hir::ExprKind::Tup(els) = e.kind else { unreachable!() };
-                els
-            }).collect();
-            fn mk_viewer<'tcx>(expr_pot: &Vec<&'tcx [hir::Expr<'tcx>]>, i: usize) -> impl Iterator<Item = &'tcx hir::Expr<'tcx>> + Clone {
+            let source_expr_pot: Vec<_> = source_exprs
+                .map(|e| {
+                    let crate::hir::ExprKind::Tup(els) = e.kind else { unreachable!() };
+                    els
+                })
+                .collect();
+            let target_expr_pot: Vec<_> = target_exprs
+                .map(|e| {
+                    let crate::hir::ExprKind::Tup(els) = e.kind else { unreachable!() };
+                    els
+                })
+                .collect();
+            fn mk_viewer<'tcx>(
+                expr_pot: &Vec<&'tcx [hir::Expr<'tcx>]>,
+                i: usize,
+            ) -> impl Iterator<Item = &'tcx hir::Expr<'tcx>> + Clone {
                 expr_pot.iter().map(move |els| &els[i])
             }
-            let (adjs, tys, obligations) = source_tys
+            let (source_adjs, target_adjs, tys, obligations) = source_tys
                 .iter()
                 .zip(*target_tys)
                 .enumerate()
                 .map(|(i, (sub_source, sub_target))| {
-                    let sub_exprs = mk_viewer(&expr_pot, i);
-                    let tuple_ok = self.tuple_coerce(coercer.clone(), sub_exprs, sub_source, sub_target)?;
-                    Ok((tuple_ok.value.0, tuple_ok.value.1, tuple_ok.obligations))
+                    let source_sub_exprs = mk_viewer(&source_expr_pot, i);
+                    let target_sub_exprs = mk_viewer(&target_expr_pot, i);
+                    let InferOk {
+                        value: ((source_adjustments, target_adjustments), coerced_ty),
+                        obligations,
+                    } = self.tuple_coerce(
+                        coercer.clone(),
+                        source_sub_exprs,
+                        target_sub_exprs,
+                        sub_source,
+                        sub_target,
+                    )?;
+                    Ok((source_adjustments, target_adjustments, coerced_ty, obligations))
                 })
-                .collect::<Result<(Vec<_>, Vec<_>, Vec<_>), _>>()?;
+                .collect::<Result<(Vec<_>, Vec<_>, Vec<_>, Vec<_>), _>>()?;
             let tuple_ty = Ty::new_tup(self.tcx, &tys[..]);
             Ok(InferOk {
-                value: (TupleAdjustment::Fields(adjs), tuple_ty),
+                value: (
+                    (TupleAdjustment::Fields(source_adjs), TupleAdjustment::Fields(target_adjs)),
+                    tuple_ty,
+                ),
                 // TODO: avoid allocation.
                 obligations: obligations.into_iter().flatten().collect(),
             })
         } else {
-            let ok = self.commit_if_ok(|_| coercer.coerce(source, target))?;
+            let InferOk {
+                value: ((source_adjustments, target_adjustments), coerced_ty),
+                obligations,
+            } = self.commit_if_ok(|_| coercer.coerce(source, target))?;
             let ok = InferOk {
-                value: (TupleAdjustment::Whole(ok.value.0), ok.value.1),
-                obligations: ok.obligations,
+                value: (
+                    (
+                        TupleAdjustment::Whole(source_adjustments),
+                        TupleAdjustment::Whole(target_adjustments),
+                    ),
+                    coerced_ty,
+                ),
+                obligations,
             };
             // let (adjustments, target) = self.register_infer_ok_obligations(ok);
             // for expr in exprs {
-                // // let expr = expr.as_coercion_site();
-                // self.apply_adjustments(expr, adjustments.clone());
+            // // let expr = expr.as_coercion_site();
+            // self.apply_adjustments(expr, adjustments.clone());
             // }
             Ok(ok)
         }
@@ -1764,7 +1821,7 @@ impl<'tcx, E: AsCoercionSite> CoerceMany<'tcx, E> {
                 match fcx.commit_if_ok(|_| coerce.coerce(expected, expression_ty)) {
                     Err(_) => unreachable!(),
                     Ok(ok) => {
-                        let (adjustments, target) = fcx.register_infer_ok_obligations(ok);
+                        let ((adjustments, _), target) = fcx.register_infer_ok_obligations(ok);
                         match self.expressions {
                             Expressions::Dynamic(ref exprs) => {
                                 for expr in exprs {
