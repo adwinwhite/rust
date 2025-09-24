@@ -33,6 +33,4 @@ fn main() {
         true => foo,
         false => bar,
     });
-
-
 }
