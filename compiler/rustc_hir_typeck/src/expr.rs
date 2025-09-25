@@ -1820,12 +1820,19 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let element_ty = if !args.is_empty() {
             let coerce_to = expected
                 .to_option(self)
-                .and_then(|uty| self.try_structurally_resolve_type(expr.span, uty).builtin_index())
-                .unwrap_or_else(|| self.next_ty_var(expr.span));
-            let mut coerce = CoerceMany::with_coercion_sites(coerce_to, args);
+                .and_then(|uty| self.try_structurally_resolve_type(expr.span, uty).builtin_index());
+            let element_expected = {
+                let orginal_expected = match coerce_to {
+                    Some(ty) => Expectation::ExpectHasType(ty),
+                    None => Expectation::NoExpectation,
+                };
+                orginal_expected.try_structurally_resolve_and_adjust_for_branches(self, expr.span)
+            };
+            let coerce_to_ty = element_expected.coercion_target_type(self, expr.span);
+            let mut coerce = CoerceMany::with_coercion_sites(coerce_to_ty, args);
             assert_eq!(self.diverges.get(), Diverges::Maybe);
             for e in args {
-                let e_ty = self.check_expr_with_hint(e, coerce_to);
+                let e_ty = self.check_expr_with_expectation(e, element_expected);
                 let cause = self.misc(e.span);
                 coerce.coerce(self, &cause, e, e_ty);
             }
