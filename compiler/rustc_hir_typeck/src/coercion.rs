@@ -1400,7 +1400,7 @@ pub fn can_coerce<'tcx>(
 /// When coercing, each branch should use the following expectations for type inference:
 /// - The branch can be coerced to the expected type of the match/if/whatever.
 /// - The branch can be coercion lub'd with the types of the previous branches.
-/// Ideally we'd have some sort of `Expectation::ParticipatsInCoerceLub(ongoing_lub_ty, final_ty)`,
+/// Ideally we'd have some sort of `Expectation::ParticipatesInCoerceLub(ongoing_lub_ty, final_ty)`,
 /// but adding and using this feels very challenging.
 /// What we instead do is to use the expected type of the match/if/whatever as
 /// the initial coercion lub. This allows us to use the lub of "expected type of match" with
