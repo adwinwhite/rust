@@ -1,5 +1,5 @@
 use rustc_middle::traits::ObligationCause;
-use rustc_middle::ty::{self, Ty};
+use rustc_middle::ty::{self, Ty, TypeVisitableExt};
 use rustc_span::Span;
 
 use super::Expectation::*;
@@ -48,7 +48,7 @@ impl<'a, 'tcx> Expectation<'tcx> {
         match *self {
             ExpectHasType(ety) => {
                 let ety = fcx.try_structurally_resolve_type(span, ety);
-                if !ety.is_ty_var() { ExpectHasType(ety) } else { NoExpectation }
+                if !ety.has_infer_types() { ExpectHasType(ety) } else { NoExpectation }
             }
             ExpectRvalueLikeUnsized(ety) => ExpectRvalueLikeUnsized(ety),
             _ => NoExpectation,

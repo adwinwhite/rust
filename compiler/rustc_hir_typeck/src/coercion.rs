@@ -1379,7 +1379,6 @@ pub fn can_coerce<'tcx>(
 /// }
 /// let final_ty = coerce.complete(fcx);
 /// ```
-pub(crate) struct CoerceMany<'tcx> {
 ///
 /// NOTE: Why does the `expected_ty` participate in the LUB?
 /// When coercing, each branch should use the following expectations for type inference:
@@ -1402,8 +1401,7 @@ pub(crate) struct CoerceMany<'tcx> {
 ///   In this case the difference does matter and we get actually incorrect results.
 /// FIXME: Ideally we'd compute the final type without unnecessarily constraining
 /// the expected type of the match when computing the types of its branches.
-pub(crate) struct CoerceMany<'tcx, 'exprs, E: AsCoercionSite> {
->>>>>>> d04050504b7 (doc: explain why `expected_ty` participates in the LUB of `CoerceMany`)
+pub(crate) struct CoerceMany<'tcx> {
     expected_ty: Ty<'tcx>,
     final_ty: Option<Ty<'tcx>>,
     expressions: Vec<&'tcx hir::Expr<'tcx>>,

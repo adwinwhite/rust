@@ -1675,7 +1675,9 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         .builtin_index()
                         // Avoid using the original type variable as the coerce_to type, as it may resolve
                         // during the first coercion instead of being the LUB type.
-                        .filter(|t| !self.try_structurally_resolve_type(expr.span, *t).is_ty_var())
+                        .filter(|t| {
+                            !self.try_structurally_resolve_type(expr.span, *t).has_infer_types()
+                        })
                 })
                 .unwrap_or_else(|| self.next_ty_var(expr.span));
             let mut coerce = CoerceMany::with_capacity(coerce_to, args.len());
