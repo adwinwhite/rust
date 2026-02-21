@@ -464,6 +464,7 @@ where
         // duplicate entries.
         let opaque_types = self.delegate.clone_opaque_types_lookup_table();
         let (goal, opaque_types) = eager_resolve_vars(self.delegate, (goal, opaque_types));
+        debug!("evaluate_goal_raw: eagerly_resolved goal={goal:?}, opaque_types={opaque_types:?}");
 
         let (orig_values, canonical_goal) = canonicalize_goal(self.delegate, goal, &opaque_types);
         let canonical_result = self.search_graph.evaluate_goal(

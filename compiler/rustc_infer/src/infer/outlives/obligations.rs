@@ -252,6 +252,7 @@ impl<'tcx> InferCtxt<'tcx> {
                     None,
                     outlives_env.known_type_outlives(),
                 );
+                debug!("region_bound_pairs: {:?}", outlives_env.region_bound_pairs());
                 let category = origin.to_constraint_category();
                 outlives.type_must_outlive(origin, sup_type, sub_region, category);
             }
@@ -335,6 +336,10 @@ where
         region: ty::Region<'tcx>,
         category: ConstraintCategory<'tcx>,
     ) {
+        debug!(
+            "type_must_outlive: region_bound_pairs = {:?}",
+            self.verify_bound.region_bound_pairs
+        );
         assert!(!ty.has_escaping_bound_vars());
 
         let mut components = smallvec![];
@@ -349,6 +354,10 @@ where
         region: ty::Region<'tcx>,
         category: ConstraintCategory<'tcx>,
     ) {
+        debug!(
+            "components_must_outlive: region_bound_pairs = {:?}",
+            self.verify_bound.region_bound_pairs
+        );
         for component in components.iter() {
             let origin = origin.clone();
             match component {
@@ -451,6 +460,10 @@ where
         // Compute the bounds we can derive from the environment. This
         // is an "approximate" match -- in some cases, these bounds
         // may not apply.
+        debug!(
+            "alias_ty_must_outlive: region_bound_pairs={:?}",
+            self.verify_bound.region_bound_pairs
+        );
         let approx_env_bounds = self.verify_bound.approx_declared_bounds_from_env(alias_ty);
         debug!(?approx_env_bounds);
 

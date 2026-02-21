@@ -16,7 +16,7 @@ use crate::infer::{GenericKind, VerifyBound};
 /// use something else.
 pub(crate) struct VerifyBoundCx<'cx, 'tcx> {
     tcx: TyCtxt<'tcx>,
-    region_bound_pairs: &'cx RegionBoundPairs<'tcx>,
+    pub(crate) region_bound_pairs: &'cx RegionBoundPairs<'tcx>,
     /// During borrowck, if there are no outlives bounds on a generic
     /// parameter `T`, we assume that `T: 'in_fn_body` holds.
     ///
@@ -95,6 +95,10 @@ impl<'cx, 'tcx> VerifyBoundCx<'cx, 'tcx> {
         &self,
         alias_ty: ty::AliasTy<'tcx>,
     ) -> Vec<ty::PolyTypeOutlivesPredicate<'tcx>> {
+        debug!(
+            "approx_declared_bounds_from_env: region_bound_pairs = {:?}",
+            self.region_bound_pairs
+        );
         let erased_alias_ty = self.tcx.erase_and_anonymize_regions(alias_ty.to_ty(self.tcx));
         self.declared_generic_bounds_from_env_for_erased_ty(erased_alias_ty)
     }
@@ -224,6 +228,10 @@ impl<'cx, 'tcx> VerifyBoundCx<'cx, 'tcx> {
         // The problem is that the type of `x` is `&'a A`. To be
         // well-formed, then, A must outlive `'a`, but we don't know that
         // this holds from first principles.
+        debug!(
+            "declared_generic_bounds_from_env_for_erased_ty: region_bound_pairs = {:?}",
+            self.region_bound_pairs
+        );
         bounds.extend(self.region_bound_pairs.iter().filter_map(|&OutlivesPredicate(p, r)| {
             debug!(
                 "declared_generic_bounds_from_env_for_erased_ty: region_bound_pair = {:?}",
