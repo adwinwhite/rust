@@ -234,6 +234,7 @@ TrivialTypeTraversalImpls! {
     crate::ty::BoundRegion<'tcx>,
     crate::ty::BoundTy<'tcx>,
     crate::ty::ScalarInt,
+    crate::ty::TyVid,
     crate::ty::UserTypeAnnotationIndex,
     crate::ty::abstract_const::NotConstEvaluatable,
     crate::ty::adjustment::AutoBorrowMutability,
@@ -802,6 +803,7 @@ macro_rules! list_fold {
 list_fold! {
     &'tcx ty::List<ty::PolyExistentialPredicate<'tcx>> : mk_poly_existential_predicates,
     &'tcx ty::List<(ty::OpaqueTypeKey<'tcx>, Ty<'tcx>)>: mk_predefined_opaques_in_body,
+    &'tcx ty::List<(Ty<'tcx>, Ty<'tcx>)>: mk_stalled_projections,
     &'tcx ty::List<PlaceElem<'tcx>> : mk_place_elems,
     &'tcx ty::List<ty::Pattern<'tcx>> : mk_patterns,
     &'tcx ty::List<ty::ArgOutlivesPredicate<'tcx>> : mk_outlives,

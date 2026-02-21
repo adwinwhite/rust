@@ -1476,7 +1476,14 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         expected: Expectation<'tcx>,
     ) -> Ty<'tcx> {
         let rcvr_t = self.check_expr(rcvr);
+        let unresolved_rcvr_t = rcvr_t;
         let rcvr_t = self.try_structurally_resolve_type(rcvr.span, rcvr_t);
+        if self.next_trait_solver()
+            && let ty::Alias(ty::AliasTyKind::Projection, _) = unresolved_rcvr_t.kind()
+            && let ty::Infer(ty::InferTy::TyVar(_)) = rcvr_t.kind()
+        {
+            self.register_projection_into_storage(rcvr_t, unresolved_rcvr_t);
+        }
 
         match self.lookup_method(rcvr_t, segment, segment.ident.span, expr, rcvr, args) {
             Ok(method) => {

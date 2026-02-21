@@ -73,7 +73,7 @@ use crate::traits;
 use crate::traits::cache::WithDepNode;
 use crate::traits::solve::{
     self, CanonicalInput, ExternalConstraints, ExternalConstraintsData, PredefinedOpaques,
-    QueryResult, inspect,
+    QueryResult, StalledProjections, inspect,
 };
 use crate::ty::predicate::ExistentialPredicateStableCmpExt as _;
 use crate::ty::{
@@ -111,12 +111,17 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
     type BoundVarKinds = &'tcx List<ty::BoundVariableKind<'tcx>>;
 
     type PredefinedOpaques = solve::PredefinedOpaques<'tcx>;
+    type StalledProjections = solve::StalledProjections<'tcx>;
 
     fn mk_predefined_opaques_in_body(
         self,
         data: &[(ty::OpaqueTypeKey<'tcx>, Ty<'tcx>)],
     ) -> Self::PredefinedOpaques {
         self.mk_predefined_opaques_in_body(data)
+    }
+
+    fn mk_stalled_projections(self, data: &[(Ty<'tcx>, Ty<'tcx>)]) -> Self::StalledProjections {
+        self.mk_stalled_projections(data)
     }
     type LocalDefIds = &'tcx ty::List<LocalDefId>;
     type CanonicalVarKinds = CanonicalVarKinds<'tcx>;
@@ -943,6 +948,7 @@ pub struct CtxtInterners<'tcx> {
     adt_def: InternedSet<'tcx, AdtDefData>,
     external_constraints: InternedSet<'tcx, ExternalConstraintsData<TyCtxt<'tcx>>>,
     predefined_opaques_in_body: InternedSet<'tcx, List<(ty::OpaqueTypeKey<'tcx>, Ty<'tcx>)>>,
+    stalled_projections: InternedSet<'tcx, List<(Ty<'tcx>, Ty<'tcx>)>>,
     fields: InternedSet<'tcx, List<FieldIdx>>,
     local_def_ids: InternedSet<'tcx, List<LocalDefId>>,
     captures: InternedSet<'tcx, List<&'tcx ty::CapturedPlace<'tcx>>>,
@@ -980,6 +986,7 @@ impl<'tcx> CtxtInterners<'tcx> {
             adt_def: InternedSet::with_capacity(N),
             external_constraints: InternedSet::with_capacity(N),
             predefined_opaques_in_body: InternedSet::with_capacity(N),
+            stalled_projections: InternedSet::with_capacity(N),
             fields: InternedSet::with_capacity(N * 4),
             local_def_ids: InternedSet::with_capacity(N),
             captures: InternedSet::with_capacity(N),
@@ -2829,6 +2836,7 @@ slice_interners!(
     patterns: pub mk_patterns(Pattern<'tcx>),
     outlives: pub mk_outlives(ty::ArgOutlivesPredicate<'tcx>),
     predefined_opaques_in_body: pub mk_predefined_opaques_in_body((ty::OpaqueTypeKey<'tcx>, Ty<'tcx>)),
+    stalled_projections: pub mk_stalled_projections((Ty<'tcx>, Ty<'tcx>)),
 );
 
 impl<'tcx> TyCtxt<'tcx> {
@@ -3192,6 +3200,14 @@ impl<'tcx> TyCtxt<'tcx> {
         T: CollectAndApply<(ty::OpaqueTypeKey<'tcx>, Ty<'tcx>), PredefinedOpaques<'tcx>>,
     {
         T::collect_and_apply(iter, |xs| self.mk_predefined_opaques_in_body(xs))
+    }
+
+    pub fn mk_stalled_projections_from_iter<I, T>(self, iter: I) -> T::Output
+    where
+        I: Iterator<Item = T>,
+        T: CollectAndApply<(Ty<'tcx>, Ty<'tcx>), StalledProjections<'tcx>>,
+    {
+        T::collect_and_apply(iter, |xs| self.mk_stalled_projections(xs))
     }
 
     pub fn mk_clauses_from_iter<I, T>(self, iter: I) -> T::Output

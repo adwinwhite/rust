@@ -16,6 +16,7 @@ pub type CanonicalInput<'tcx, P = ty::Predicate<'tcx>> = ir::solve::CanonicalInp
 pub type CanonicalResponse<'tcx> = ir::solve::CanonicalResponse<TyCtxt<'tcx>>;
 
 pub type PredefinedOpaques<'tcx> = &'tcx ty::List<(ty::OpaqueTypeKey<'tcx>, Ty<'tcx>)>;
+pub type StalledProjections<'tcx> = &'tcx ty::List<(Ty<'tcx>, Ty<'tcx>)>;
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Hash, HashStable)]
 pub struct ExternalConstraints<'tcx>(

@@ -76,6 +76,7 @@ pub struct MethodAutoderefSteps<'tcx> {
     ///
     /// Only used by the new solver for now.
     pub predefined_opaques_in_body: solve::PredefinedOpaques<'tcx>,
+    pub stalled_projections: &'tcx ty::List<(Ty<'tcx>, Ty<'tcx>)>,
     pub self_ty: Ty<'tcx>,
 }
 

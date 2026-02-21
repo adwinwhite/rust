@@ -398,7 +398,22 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         } else {
             ty::List::empty()
         };
-        let value = query::MethodAutoderefSteps { predefined_opaques_in_body, self_ty };
+        let stalled_projections = if self.next_trait_solver() {
+            self.tcx.mk_stalled_projections_from_iter(
+                self.inner
+                    .borrow()
+                    .stalled_projections()
+                    .iter()
+                    .map(|(i, p)| (Ty::new_infer(self.tcx, ty::InferTy::TyVar(*i)), *p)),
+            )
+        } else {
+            ty::List::empty()
+        };
+        let value = query::MethodAutoderefSteps {
+            predefined_opaques_in_body,
+            stalled_projections,
+            self_ty,
+        };
         let query_input = self
             .canonicalize_query(ParamEnvAnd { param_env: self.param_env, value }, &mut orig_values);
 
@@ -413,7 +428,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 let infcx = &self.infcx;
                 let (ParamEnvAnd { param_env: _, value }, var_values) =
                     infcx.instantiate_canonical(span, &query_input.canonical);
-                let query::MethodAutoderefSteps { predefined_opaques_in_body: _, self_ty } = value;
+                let query::MethodAutoderefSteps { self_ty, .. } = value;
                 debug!(?self_ty, ?query_input, "probe_op: Mode::Path");
                 let prev_opaque_entries = self.inner.borrow_mut().opaque_types().num_entries();
                 MethodAutoderefStepsResult {
@@ -591,7 +606,8 @@ pub(crate) fn method_autoderef_steps<'tcx>(
     let (ref infcx, goal, inference_vars) = tcx.infer_ctxt().build_with_canonical(DUMMY_SP, &goal);
     let ParamEnvAnd {
         param_env,
-        value: query::MethodAutoderefSteps { predefined_opaques_in_body, self_ty },
+        value:
+            query::MethodAutoderefSteps { predefined_opaques_in_body, stalled_projections, self_ty },
     } = goal;
     for (key, ty) in predefined_opaques_in_body {
         let prev = infcx
@@ -613,12 +629,24 @@ pub(crate) fn method_autoderef_steps<'tcx>(
     }
     let prev_opaque_entries = infcx.inner.borrow_mut().opaque_types().num_entries();
 
+    for (infer_ty, projection_ty) in stalled_projections {
+        infcx.register_projection_into_storage(infer_ty, projection_ty);
+    }
+
     // We accept not-yet-defined opaque types in the autoderef
     // chain to support recursive calls. We do error if the final
     // infer var is not an opaque.
     let self_ty_is_opaque = |ty: Ty<'_>| {
         if let &ty::Infer(ty::TyVar(vid)) = ty.kind() {
             infcx.has_opaques_with_sub_unified_hidden_type(vid)
+        } else {
+            false
+        }
+    };
+
+    let self_ty_is_projection = |ty: Ty<'tcx>| {
+        if let &ty::Infer(ty::TyVar(_)) = ty.kind() {
+            infcx.has_projection_with_sub_unified_var(ty)
         } else {
             false
         }
@@ -678,6 +706,7 @@ pub(crate) fn method_autoderef_steps<'tcx>(
         let steps = autoderef_via_deref
             .by_ref()
             .map(|(ty, d)| {
+                debug!("method_autoderef_steps: ty={:?}", ty);
                 let step = CandidateStep {
                     self_ty: infcx.make_query_response_ignoring_pending_obligations(
                         inference_vars,
@@ -701,14 +730,18 @@ pub(crate) fn method_autoderef_steps<'tcx>(
     };
     let final_ty = autoderef_via_deref.final_ty();
     let opt_bad_ty = match final_ty.kind() {
-        ty::Infer(ty::TyVar(_)) if !self_ty_is_opaque(final_ty) => Some(MethodAutoderefBadTy {
-            reached_raw_pointer,
-            ty: infcx.make_query_response_ignoring_pending_obligations(
-                inference_vars,
-                final_ty,
-                prev_opaque_entries,
-            ),
-        }),
+        ty::Infer(ty::TyVar(_))
+            if (!self_ty_is_opaque(final_ty)) && (!self_ty_is_projection(final_ty)) =>
+        {
+            Some(MethodAutoderefBadTy {
+                reached_raw_pointer,
+                ty: infcx.make_query_response_ignoring_pending_obligations(
+                    inference_vars,
+                    final_ty,
+                    prev_opaque_entries,
+                ),
+            })
+        }
         ty::Error(_) => Some(MethodAutoderefBadTy {
             reached_raw_pointer,
             ty: infcx.make_query_response_ignoring_pending_obligations(

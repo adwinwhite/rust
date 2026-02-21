@@ -149,6 +149,9 @@ pub struct InferCtxtInner<'tcx> {
 
     /// Caches for opaque type inference.
     opaque_type_storage: OpaqueTypeStorage<'tcx>,
+
+    /// Store the original projection ty for those normalized to infer vars.
+    projection_storage: FxIndexMap<ty::TyVid, Ty<'tcx>>,
 }
 
 impl<'tcx> InferCtxtInner<'tcx> {
@@ -166,6 +169,7 @@ impl<'tcx> InferCtxtInner<'tcx> {
             region_assumptions: Default::default(),
             hir_typeck_potentially_region_dependent_goals: Default::default(),
             opaque_type_storage: Default::default(),
+            projection_storage: Default::default(),
         }
     }
 
@@ -202,6 +206,11 @@ impl<'tcx> InferCtxtInner<'tcx> {
     #[inline]
     pub fn opaque_types(&mut self) -> opaque_types::OpaqueTypeTable<'_, 'tcx> {
         self.opaque_type_storage.with_log(&mut self.undo_log)
+    }
+
+    #[inline]
+    pub fn stalled_projections(&self) -> &FxIndexMap<ty::TyVid, Ty<'tcx>> {
+        &self.projection_storage
     }
 
     #[inline]
@@ -1031,6 +1040,33 @@ impl<'tcx> InferCtxt<'tcx> {
                 None
             })
             .collect()
+    }
+
+    pub fn has_projection_with_sub_unified_var(&self, infer_ty: Ty<'tcx>) -> bool {
+        self.projection_ty_with_sub_unified_var(infer_ty).is_some()
+    }
+
+    pub fn projection_ty_with_sub_unified_var(&self, infer_ty: Ty<'tcx>) -> Option<Ty<'tcx>> {
+        if !self.next_trait_solver() {
+            return None;
+        }
+        let ty::Infer(ty::TyVar(ty_vid)) = infer_ty.kind() else {
+            panic!("expected a type variable, got `{infer_ty}`");
+        };
+
+        let ty_sub_vid = self.sub_unification_table_root_var(*ty_vid);
+        self.inner.borrow().projection_storage.get(&ty_sub_vid).map(|t| *t)
+    }
+
+    #[inline(always)]
+    pub fn register_projection_into_storage(&self, infer_ty: Ty<'tcx>, projection_ty: Ty<'tcx>) {
+        debug_assert!(self.next_trait_solver());
+        let ty::Infer(ty::TyVar(ty_vid)) = infer_ty.kind() else {
+            panic!("expected a type variable, got `{infer_ty}`");
+        };
+
+        let ty_sub_vid = self.sub_unification_table_root_var(*ty_vid);
+        self.inner.borrow_mut().projection_storage.insert(ty_sub_vid, projection_ty);
     }
 
     #[inline(always)]

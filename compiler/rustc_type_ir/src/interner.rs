@@ -79,6 +79,14 @@ pub trait Interner:
         data: &[(ty::OpaqueTypeKey<Self>, Self::Ty)],
     ) -> Self::PredefinedOpaques;
 
+    type StalledProjections: Copy
+        + Debug
+        + Hash
+        + Eq
+        + TypeFoldable<Self>
+        + SliceLike<Item = (Self::Ty, Self::Ty)>;
+    fn mk_stalled_projections(self, data: &[(Self::Ty, Self::Ty)]) -> Self::StalledProjections;
+
     type LocalDefIds: Copy
         + Debug
         + Hash
