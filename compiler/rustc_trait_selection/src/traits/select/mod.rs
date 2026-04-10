@@ -27,8 +27,8 @@ use rustc_middle::ty::error::TypeErrorToStringExt;
 use rustc_middle::ty::print::{PrintTraitRefExt as _, with_no_trimmed_paths};
 use rustc_middle::ty::{
     self, CandidatePreferenceMode, DeepRejectCtxt, GenericArgsRef, PolyProjectionPredicate,
-    SizedTraitKind, Ty, TyCtxt, TypeFoldable, TypeVisitableExt, TypingMode, Upcast, elaborate,
-    may_use_unstable_feature,
+    SizedTraitKind, Ty, TyCtxt, TypeFoldable, TypeVisitableExt, TypingMode, Unnormalized, Upcast,
+    elaborate, may_use_unstable_feature,
 };
 use rustc_next_trait_solver::solve::AliasBoundKind;
 use rustc_span::Symbol;
@@ -981,9 +981,11 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                         }
                         ty::ConstKind::Error(_) => return Ok(EvaluatedToOk),
                         ty::ConstKind::Value(cv) => cv.ty,
-                        ty::ConstKind::Unevaluated(uv) => {
-                            self.tcx().type_of(uv.def).instantiate(self.tcx(), uv.args)
-                        }
+                        ty::ConstKind::Unevaluated(uv) => self
+                            .tcx()
+                            .type_of(uv.def)
+                            .instantiate(self.tcx(), uv.args)
+                            .skip_normalization(),
                         // FIXME(generic_const_exprs): See comment in `fulfill.rs`
                         ty::ConstKind::Expr(_) => return Ok(EvaluatedToOk),
                         ty::ConstKind::Placeholder(_) => {
@@ -1669,7 +1671,8 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                 self.tcx().item_self_bounds(def_id)
             };
 
-            for bound in relevant_bounds.instantiate(self.tcx(), alias_ty.args) {
+            for bound in relevant_bounds.instantiate(self.tcx(), alias_ty.args).skip_normalization()
+            {
                 for_each(self, bound, idx, alias_bound_kind)?;
                 idx += 1;
             }
@@ -2184,7 +2187,7 @@ impl<'tcx> SelectionContext<'_, 'tcx> {
 
             ty::Adt(def, args) => {
                 if let Some(crit) = def.sizedness_constraint(self.tcx(), sizedness) {
-                    ty::Binder::dummy(vec![crit.instantiate(self.tcx(), args)])
+                    ty::Binder::dummy(vec![crit.instantiate(self.tcx(), args).skip_normalization()])
                 } else {
                     ty::Binder::dummy(vec![])
                 }
@@ -2256,6 +2259,7 @@ impl<'tcx> SelectionContext<'_, 'tcx> {
                 .tcx
                 .coroutine_hidden_types(def_id)
                 .instantiate(self.infcx.tcx, args)
+                .skip_normalization()
                 .map_bound(|witness| witness.types.to_vec()),
 
             ty::Closure(_, args) => ty::Binder::dummy(args.as_closure().upvar_tys().to_vec()),
@@ -2388,6 +2392,7 @@ impl<'tcx> SelectionContext<'_, 'tcx> {
                 .tcx
                 .coroutine_hidden_types(def_id)
                 .instantiate(self.infcx.tcx, args)
+                .skip_normalization()
                 .map_bound(|witness| AutoImplConstituents {
                     types: witness.types.to_vec(),
                     assumptions: witness.assumptions.to_vec(),
@@ -2415,7 +2420,7 @@ impl<'tcx> SelectionContext<'_, 'tcx> {
                     // the auto trait bounds in question.
                     let ty = self.tcx().type_of_opaque(def_id);
                     ty::Binder::dummy(AutoImplConstituents {
-                        types: vec![ty.instantiate(self.tcx(), args)],
+                        types: vec![ty.instantiate(self.tcx(), args).skip_normalization()],
                         assumptions: vec![],
                     })
                 }
@@ -2518,7 +2523,8 @@ impl<'tcx> SelectionContext<'_, 'tcx> {
 
         let impl_args = self.infcx.fresh_args_for_item(obligation.cause.span, impl_def_id);
 
-        let trait_ref = impl_trait_header.trait_ref.instantiate(self.tcx(), impl_args);
+        let trait_ref =
+            impl_trait_header.trait_ref.instantiate(self.tcx(), impl_args).skip_normalization();
         debug!(?impl_trait_header);
 
         let Normalized { value: impl_trait_ref, obligations: mut nested_obligations } =
@@ -2830,7 +2836,8 @@ impl<'tcx> SelectionContext<'_, 'tcx> {
         // that order.
         let predicates = tcx.predicates_of(def_id);
         assert_eq!(predicates.parent, None);
-        let predicates = predicates.instantiate_own(tcx, args);
+        let predicates =
+            predicates.instantiate_own(tcx, args).map(Unnormalized::skip_normalization);
         let mut obligations = PredicateObligations::with_capacity(predicates.len());
         for (index, (predicate, span)) in predicates.into_iter().enumerate() {
             let cause = if tcx.is_lang_item(parent_trait_pred.def_id(), LangItem::CoerceUnsized) {
@@ -2863,7 +2870,11 @@ impl<'tcx> SelectionContext<'_, 'tcx> {
 
         // Register any outlives obligations from the trait here, cc #124336.
         if tcx.def_kind(def_id) == (DefKind::Impl { of_trait: true }) {
-            for clause in tcx.impl_super_outlives(def_id).iter_instantiated(tcx, args) {
+            for clause in tcx
+                .impl_super_outlives(def_id)
+                .iter_instantiated(tcx, args)
+                .map(Unnormalized::skip_normalization)
+            {
                 let clause = normalize_with_depth_to(
                     self,
                     param_env,
