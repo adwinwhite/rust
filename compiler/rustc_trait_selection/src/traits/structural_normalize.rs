@@ -1,7 +1,7 @@
 use rustc_infer::infer::at::At;
 use rustc_infer::traits::TraitEngine;
 use rustc_macros::extension;
-use rustc_middle::ty::{self, Ty};
+use rustc_middle::ty::{self, Ty, Unnormalized};
 
 use crate::traits::{NormalizeExt, Obligation};
 
@@ -34,7 +34,7 @@ impl<'tcx> At<'_, 'tcx> {
         term: Unnormalized<'tcx, ty::Term<'tcx>>,
         fulfill_cx: &mut dyn TraitEngine<'tcx, E>,
     ) -> Result<ty::Term<'tcx>, Vec<E>> {
-        assert!(!term.apply(|v| v.is_infer()), "should have resolved vars before calling");
+        assert!(!term.probe(|v| v.is_infer()), "should have resolved vars before calling");
 
         if self.infcx.next_trait_solver() {
             let term = term.inside_norm();

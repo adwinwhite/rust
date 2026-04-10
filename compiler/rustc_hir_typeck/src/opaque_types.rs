@@ -2,7 +2,7 @@ use rustc_hir::def::DefKind;
 use rustc_infer::traits::ObligationCause;
 use rustc_middle::ty::{
     self, DefiningScopeKind, DefinitionSiteHiddenType, OpaqueTypeKey, ProvisionalHiddenType,
-    TypeVisitableExt, TypingMode,
+    TypeVisitableExt, TypingMode, Unnormalized,
 };
 use rustc_trait_selection::error_reporting::infer::need_type_info::TypeAnnotationNeeded;
 use rustc_trait_selection::opaque_types::{
@@ -131,7 +131,7 @@ impl<'tcx> FnCtxt<'_, 'tcx> {
                         continue;
                     }
 
-                    let expected = ty.ty.instantiate(tcx, opaque_type_key.args);
+                    let expected = ty.ty.instantiate(tcx, opaque_type_key.args).skip_norm_wip();
                     self.demand_eqtype(hidden_type.span, expected, hidden_type.ty);
                 }
 
@@ -228,7 +228,7 @@ impl<'tcx> FnCtxt<'_, 'tcx> {
 
         let cause = ObligationCause::misc(hidden_type.span, self.body_id);
         let at = self.at(&cause, self.param_env);
-        let hidden_type = match solve::deeply_normalize(at, hidden_type) {
+        let hidden_type = match solve::deeply_normalize(at, Unnormalized::new_wip(hidden_type)) {
             Ok(hidden_type) => hidden_type,
             Err(errors) => {
                 let guar = self.err_ctxt().report_fulfillment_errors(errors);

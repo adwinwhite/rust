@@ -9,7 +9,7 @@ use rustc_infer::traits::{
 };
 use rustc_middle::traits::query::NoSolution;
 use rustc_middle::ty::error::{ExpectedFound, TypeError};
-use rustc_middle::ty::{self, Ty, TyCtxt};
+use rustc_middle::ty::{self, Ty, TyCtxt, Unnormalized};
 use rustc_middle::{bug, span_bug};
 use rustc_next_trait_solver::solve::{GoalEvaluation, SolverDelegateEvalExt as _};
 use tracing::{instrument, trace};
@@ -35,7 +35,7 @@ pub(super) fn fulfillment_error_for_no_solution<'tcx>(
         ty::PredicateKind::Clause(ty::ClauseKind::ConstArgHasType(ct, expected_ty)) => {
             let ct_ty = match ct.kind() {
                 ty::ConstKind::Unevaluated(uv) => {
-                    infcx.tcx.type_of(uv.def).instantiate(infcx.tcx, uv.args)
+                    infcx.tcx.type_of(uv.def).instantiate(infcx.tcx, uv.args).skip_norm_wip()
                 }
                 ty::ConstKind::Param(param_ct) => {
                     param_ct.find_const_ty_from_env(obligation.param_env)
@@ -626,11 +626,12 @@ fn derive_host_cause<'tcx>(
                 .into_iter()
                 .chain(tcx.const_conditions(impl_def_id).instantiate_identity(tcx).into_iter().map(
                     |(trait_ref, span)| {
+                        let trait_ref = trait_ref.skip_norm_wip();
                         (
-                            trait_ref.to_host_effect_clause(
+                            Unnormalized::new_wip(trait_ref.to_host_effect_clause(
                                 tcx,
                                 parent_host_pred.skip_binder().constness,
-                            ),
+                            )),
                             span,
                         )
                     },

@@ -244,7 +244,10 @@ impl DebugContext {
 
         type_names::push_generic_args(
             tcx,
-            tcx.normalize_erasing_regions(ty::TypingEnv::fully_monomorphized(), args),
+            tcx.normalize_erasing_regions(
+                ty::TypingEnv::fully_monomorphized(),
+                Unnormalized::new_wip(args),
+            ),
             &mut name,
         );
 
