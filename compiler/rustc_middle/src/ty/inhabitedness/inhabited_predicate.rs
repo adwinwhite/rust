@@ -2,7 +2,7 @@ use rustc_macros::HashStable;
 use smallvec::SmallVec;
 use tracing::instrument;
 
-use crate::ty::{self, DefId, OpaqueTypeKey, Ty, TyCtxt, TypingEnv};
+use crate::ty::{self, DefId, OpaqueTypeKey, Ty, TyCtxt, TypingEnv, Unnormalized};
 
 /// Represents whether some type is inhabited in a given context.
 /// Examples of uninhabited types are `!`, `enum Void {}`, or a struct
@@ -98,7 +98,7 @@ impl<'tcx> InhabitedPredicate<'tcx> {
             // we have a param_env available, we can do better.
             Self::GenericType(t) => {
                 let normalized_pred = tcx
-                    .try_normalize_erasing_regions(typing_env, t)
+                    .try_normalize_erasing_regions(typing_env, Unnormalized::new(t))
                     .map_or(self, |t| t.inhabited_predicate(tcx));
                 match normalized_pred {
                     // We don't have more information than we started with, so consider inhabited.

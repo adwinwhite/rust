@@ -7,6 +7,7 @@ use rustc_middle::query::Providers;
 use rustc_middle::traits::{BuiltinImplSource, CodegenObligationError};
 use rustc_middle::ty::{
     self, ClosureKind, GenericArgsRef, Instance, PseudoCanonicalInput, TyCtxt, TypeVisitableExt,
+    Unnormalized,
 };
 use rustc_span::sym;
 use rustc_trait_selection::traits;
@@ -28,7 +29,7 @@ fn resolve_instance_raw<'tcx>(
             def_id,
             typing_env,
             trait_def_id,
-            tcx.normalize_erasing_regions(typing_env, args),
+            tcx.normalize_erasing_regions(typing_env, Unnormalized::new(args)),
         )
     } else {
         let def = if tcx.intrinsic(def_id).is_some() {

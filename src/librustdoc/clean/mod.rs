@@ -1893,7 +1893,7 @@ pub(crate) fn clean_ty<'tcx>(ty: &hir::Ty<'tcx>, cx: &mut DocContext<'tcx>) -> T
                 hir::ConstArgKind::Anon(hir::AnonConst { def_id, .. }) => {
                     let ct = lower_const_arg_for_rustdoc(cx.tcx, const_arg, cx.tcx.types.usize);
                     let typing_env = ty::TypingEnv::post_analysis(cx.tcx, *def_id);
-                    let ct = cx.tcx.normalize_erasing_regions(typing_env, ct);
+                    let ct = cx.tcx.normalize_erasing_regions(typing_env, Unnormalized::new(ct));
                     print_const(cx.tcx, ct)
                 }
                 hir::ConstArgKind::Struct(..)
@@ -2122,7 +2122,7 @@ pub(crate) fn clean_middle_ty<'tcx>(
             format!("{pat:?}").into_boxed_str(),
         ),
         ty::Array(ty, n) => {
-            let n = cx.tcx.normalize_erasing_regions(cx.typing_env(), n);
+            let n = cx.tcx.normalize_erasing_regions(cx.typing_env(), Unnormalized::new(n));
             let n = print_const(cx.tcx, n);
             Array(Box::new(clean_middle_ty(bound_ty.rebind(ty), cx, None, None)), n.into())
         }

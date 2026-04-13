@@ -7,6 +7,7 @@ use rustc_infer::infer::{DefineOpaqueTypes, InferCtxt, TyCtxtInferExt};
 use rustc_lint_defs::builtin::UNCOVERED_PARAM_IN_PROJECTION;
 use rustc_middle::ty::{
     self, Ty, TyCtxt, TypeSuperVisitable, TypeVisitable, TypeVisitableExt, TypeVisitor, TypingMode,
+    Unnormalized,
 };
 use rustc_middle::{bug, span_bug};
 use rustc_span::def_id::{DefId, LocalDefId};
@@ -307,7 +308,7 @@ fn orphan_check<'tcx>(
         let ty::Alias(..) = user_ty.kind() else { return Ok(user_ty) };
 
         let ocx = traits::ObligationCtxt::new(&infcx);
-        let ty = ocx.normalize(&cause, ty::ParamEnv::empty(), user_ty);
+        let ty = ocx.normalize(&cause, ty::ParamEnv::empty(), Unnormalized::new(user_ty));
         let ty = infcx.resolve_vars_if_possible(ty);
         let errors = ocx.try_evaluate_obligations();
         if !errors.is_empty() {
@@ -318,7 +319,7 @@ fn orphan_check<'tcx>(
             ocx.structurally_normalize_ty(
                 &cause,
                 ty::ParamEnv::empty(),
-                infcx.resolve_vars_if_possible(ty),
+                Unnormalized::new(infcx.resolve_vars_if_possible(ty)),
             )
             .unwrap_or(ty)
         } else {

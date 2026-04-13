@@ -21,6 +21,7 @@ use rustc_middle::traits::specialization_graph::OverlapMode;
 use rustc_middle::ty::fast_reject::DeepRejectCtxt;
 use rustc_middle::ty::{
     self, Ty, TyCtxt, TypeSuperVisitable, TypeVisitable, TypeVisitableExt, TypeVisitor, TypingMode,
+    Unnormalized,
 };
 pub use rustc_next_trait_solver::coherence::*;
 use rustc_next_trait_solver::solve::SolverDelegateEvalExt;
@@ -232,7 +233,7 @@ fn fresh_impl_header_normalized<'tcx>(
     let header = fresh_impl_header(infcx, impl_def_id, is_of_trait);
 
     let InferOk { value: mut header, obligations } =
-        infcx.at(&ObligationCause::dummy(), param_env).normalize(header);
+        infcx.at(&ObligationCause::dummy(), param_env).normalize(Unnormalized::new(header));
 
     header.predicates.extend(obligations.into_iter().map(|o| o.predicate));
     header
@@ -800,7 +801,11 @@ impl<'a, 'tcx> ProofTreeVisitor<'tcx> for AmbiguityCausesVisitor<'a, 'tcx> {
             if matches!(ty.kind(), ty::Alias(..)) {
                 let ocx = ObligationCtxt::new(infcx);
                 ty = ocx
-                    .structurally_normalize_ty(&ObligationCause::dummy(), param_env, ty)
+                    .structurally_normalize_ty(
+                        &ObligationCause::dummy(),
+                        param_env,
+                        Unnormalized::new(ty),
+                    )
                     .map_err(|_| ())?;
                 if !ocx.try_evaluate_obligations().is_empty() {
                     return Err(());

@@ -14,7 +14,8 @@ use rustc_middle::mir::*;
 use rustc_middle::ty::adjustment::PointerCoercion;
 use rustc_middle::ty::print::with_no_trimmed_paths;
 use rustc_middle::ty::{
-    self, CoroutineArgsExt, InstanceKind, ScalarInt, Ty, TyCtxt, TypeVisitableExt, Upcast, Variance,
+    self, CoroutineArgsExt, InstanceKind, ScalarInt, Ty, TyCtxt, TypeVisitableExt, Unnormalized,
+    Upcast, Variance,
 };
 use rustc_middle::{bug, span_bug};
 use rustc_mir_dataflow::debuginfo::debuginfo_locals;
@@ -1042,7 +1043,9 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                     assert_eq!(idx, FIRST_VARIANT);
                     let dest_ty = self.tcx.normalize_erasing_regions(
                         self.typing_env,
-                        adt_def.non_enum_variant().fields[field].ty(self.tcx, args),
+                        Unnormalized::new(
+                            adt_def.non_enum_variant().fields[field].ty(self.tcx, args),
+                        ),
                     );
                     if let [field] = fields.raw.as_slice() {
                         let src_ty = field.ty(self.body, self.tcx);
@@ -1065,9 +1068,10 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                         ));
                     }
                     for (src, dest) in std::iter::zip(fields, &variant.fields) {
-                        let dest_ty = self
-                            .tcx
-                            .normalize_erasing_regions(self.typing_env, dest.ty(self.tcx, args));
+                        let dest_ty = self.tcx.normalize_erasing_regions(
+                            self.typing_env,
+                            Unnormalized::new(dest.ty(self.tcx, args)),
+                        );
                         if !self.mir_assign_valid_types(src.ty(self.body, self.tcx), dest_ty) {
                             self.fail(location, "adt field has the wrong type");
                         }
@@ -1404,7 +1408,7 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
 
                         if !self
                             .tcx
-                            .normalize_erasing_regions(self.typing_env, op_ty)
+                            .normalize_erasing_regions(self.typing_env, Unnormalized::new(op_ty))
                             .is_sized(self.tcx, self.typing_env)
                         {
                             self.fail(
@@ -1414,7 +1418,10 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                         }
                         if !self
                             .tcx
-                            .normalize_erasing_regions(self.typing_env, *target_type)
+                            .normalize_erasing_regions(
+                                self.typing_env,
+                                Unnormalized::new(*target_type),
+                            )
                             .is_sized(self.tcx, self.typing_env)
                         {
                             self.fail(

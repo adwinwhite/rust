@@ -12,7 +12,7 @@ use rustc_infer::traits::{
     Obligation, ObligationCause, ObligationCauseCode, PolyTraitObligation, PredicateObligation,
 };
 use rustc_middle::ty::print::PrintPolyTraitPredicateExt;
-use rustc_middle::ty::{self, Ty, TyCtxt, TypeVisitable as _, TypeVisitableExt as _};
+use rustc_middle::ty::{self, Ty, TyCtxt, TypeVisitable as _, TypeVisitableExt as _, Unnormalized};
 use rustc_session::parse::feature_err_unstable_feature_bound;
 use rustc_span::{DUMMY_SP, ErrorGuaranteed, Span};
 use tracing::{debug, instrument};
@@ -44,14 +44,17 @@ pub fn compute_applicable_impls_for_diagnostics<'tcx>(
             let obligation_trait_ref = ocx.normalize(
                 &ObligationCause::dummy(),
                 param_env,
-                placeholder_obligation.trait_ref,
+                Unnormalized::new(placeholder_obligation.trait_ref),
             );
 
             let impl_args = infcx.fresh_args_for_item(DUMMY_SP, impl_def_id);
             let impl_trait_ref =
                 tcx.impl_trait_ref(impl_def_id).instantiate(tcx, impl_args).skip_normalization();
-            let impl_trait_ref =
-                ocx.normalize(&ObligationCause::dummy(), param_env, impl_trait_ref);
+            let impl_trait_ref = ocx.normalize(
+                &ObligationCause::dummy(),
+                param_env,
+                Unnormalized::new(impl_trait_ref),
+            );
 
             if let Err(_) =
                 ocx.eq(&ObligationCause::dummy(), param_env, obligation_trait_ref, impl_trait_ref)
@@ -95,7 +98,7 @@ pub fn compute_applicable_impls_for_diagnostics<'tcx>(
             let obligation_trait_ref = ocx.normalize(
                 &ObligationCause::dummy(),
                 param_env,
-                placeholder_obligation.trait_ref,
+                Unnormalized::new(placeholder_obligation.trait_ref),
             );
 
             let param_env_predicate = infcx.instantiate_binder_with_fresh_vars(
@@ -103,8 +106,11 @@ pub fn compute_applicable_impls_for_diagnostics<'tcx>(
                 BoundRegionConversionTime::HigherRankedType,
                 poly_trait_predicate,
             );
-            let param_env_trait_ref =
-                ocx.normalize(&ObligationCause::dummy(), param_env, param_env_predicate.trait_ref);
+            let param_env_trait_ref = ocx.normalize(
+                &ObligationCause::dummy(),
+                param_env,
+                Unnormalized::new(param_env_predicate.trait_ref),
+            );
 
             if let Err(_) = ocx.eq(
                 &ObligationCause::dummy(),

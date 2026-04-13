@@ -375,11 +375,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             {
                 let inferred_sig = self.normalize(
                     span,
-                    self.deduce_sig_from_projection(
+                    Unnormalized::new(self.deduce_sig_from_projection(
                         Some(span),
                         closure_kind,
                         bound_predicate.rebind(proj_predicate),
-                    ),
+                    )),
                 );
 
                 // Make sure that we didn't infer a signature that mentions itself.
@@ -973,7 +973,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         self.typeck_results.borrow_mut().user_provided_sigs.insert(expr_def_id, c_result);
 
         // Normalize only after registering in `user_provided_sigs`.
-        self.normalize(self.tcx.def_span(expr_def_id), result)
+        self.normalize(self.tcx.def_span(expr_def_id), Unnormalized::new(result))
     }
 
     /// Invoked when we are translating the coroutine that results
@@ -1037,7 +1037,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             }
         };
 
-        let output_ty = self.normalize(closure_span, output_ty);
+        let output_ty = self.normalize(closure_span, Unnormalized::new(output_ty));
 
         // async fn that have opaque types in their return type need to redo the conversion to inference variables
         // as they fetch the still opaque version from the signature.
@@ -1144,7 +1144,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     ) -> ClosureSignatures<'tcx> {
         let liberated_sig =
             self.tcx().liberate_late_bound_regions(expr_def_id.to_def_id(), bound_sig);
-        let liberated_sig = self.normalize(self.tcx.def_span(expr_def_id), liberated_sig);
+        let liberated_sig =
+            self.normalize(self.tcx.def_span(expr_def_id), Unnormalized::new(liberated_sig));
         ClosureSignatures { bound_sig, liberated_sig }
     }
 }

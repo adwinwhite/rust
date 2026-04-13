@@ -35,7 +35,7 @@ use rustc_middle::span_bug;
 use rustc_middle::ty::error::{ExpectedFound, TypeError};
 use rustc_middle::ty::{
     self, GenericArgs, GenericArgsRef, Ty, TyCtxt, TypeFoldable, TypeFolder, TypeSuperFoldable,
-    TypeSuperVisitable, TypeVisitable, TypeVisitableExt, TypingMode, Upcast,
+    TypeSuperVisitable, TypeVisitable, TypeVisitableExt, TypingMode, Unnormalized, Upcast,
 };
 use rustc_span::Span;
 use rustc_span::def_id::DefId;
@@ -273,7 +273,7 @@ fn do_normalize_predicates<'tcx>(
     // we move over to lazy normalization *anyway*.
     let infcx = tcx.infer_ctxt().ignoring_regions().build(TypingMode::non_body_analysis());
     let ocx = ObligationCtxt::new_with_diagnostics(&infcx);
-    let predicates = ocx.normalize(&cause, elaborated_env, predicates);
+    let predicates = ocx.normalize(&cause, elaborated_env, Unnormalized::new(predicates));
 
     let errors = ocx.evaluate_obligations_error_on_ambiguity();
     if !errors.is_empty() {
@@ -504,7 +504,7 @@ pub fn deeply_normalize_param_env_ignoring_regions<'tcx>(
         .build(TypingMode::non_body_analysis());
     let predicates = match crate::solve::deeply_normalize::<_, FulfillmentError<'tcx>>(
         infcx.at(&cause, elaborated_env),
-        predicates,
+        Unnormalized::new(predicates),
     ) {
         Ok(predicates) => predicates,
         Err(errors) => {
@@ -795,7 +795,8 @@ pub fn impossible_predicates<'tcx>(tcx: TyCtxt<'tcx>, predicates: Vec<ty::Clause
         .build_with_typing_env(ty::TypingEnv::fully_monomorphized());
 
     let ocx = ObligationCtxt::new(&infcx);
-    let predicates = ocx.normalize(&ObligationCause::dummy(), param_env, predicates);
+    let predicates =
+        ocx.normalize(&ObligationCause::dummy(), param_env, Unnormalized::new(predicates));
     for predicate in predicates {
         let obligation = Obligation::new(tcx, ObligationCause::dummy(), param_env, predicate);
         ocx.register_obligation(obligation);

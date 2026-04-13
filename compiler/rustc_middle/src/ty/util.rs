@@ -28,7 +28,7 @@ use crate::traits::ObligationCause;
 use crate::ty::layout::{FloatExt, IntegerExt};
 use crate::ty::{
     self, Asyncness, FallibleTypeFolder, GenericArgKind, GenericArgsRef, Ty, TyCtxt, TypeFoldable,
-    TypeFolder, TypeSuperFoldable, TypeVisitableExt, Upcast,
+    TypeFolder, TypeSuperFoldable, TypeVisitableExt, Unnormalized, Upcast,
 };
 
 #[derive(Copy, Clone, Debug)]
@@ -220,7 +220,7 @@ impl<'tcx> TyCtxt<'tcx> {
         tcx.struct_tail_raw(
             ty,
             &ObligationCause::dummy(),
-            |ty| tcx.normalize_erasing_regions(typing_env, ty),
+            |ty| tcx.normalize_erasing_regions(typing_env, Unnormalized::new(ty)),
             || {},
         )
     }
@@ -335,7 +335,7 @@ impl<'tcx> TyCtxt<'tcx> {
     ) -> (Ty<'tcx>, Ty<'tcx>) {
         let tcx = self;
         tcx.struct_lockstep_tails_raw(source, target, |ty| {
-            tcx.normalize_erasing_regions(typing_env, ty)
+            tcx.normalize_erasing_regions(typing_env, Unnormalized::new(ty))
         })
     }
 
@@ -742,10 +742,8 @@ impl<'tcx> TyCtxt<'tcx> {
     /// Get the type of the pointer to the static that we use in MIR.
     pub fn static_ptr_ty(self, def_id: DefId, typing_env: ty::TypingEnv<'tcx>) -> Ty<'tcx> {
         // Make sure that any constants in the static's type are evaluated.
-        let static_ty = self.normalize_erasing_regions(
-            typing_env,
-            self.type_of(def_id).instantiate_identity().skip_normalization(),
-        );
+        let static_ty =
+            self.normalize_erasing_regions(typing_env, self.type_of(def_id).instantiate_identity());
 
         // Make sure that accesses to unsafe statics end up using raw pointers.
         // For thread-locals, this needs to be kept in sync with `Rvalue::ty`.
@@ -1341,7 +1339,7 @@ impl<'tcx> Ty<'tcx> {
                 // query keys used. If normalization fails, we just use `query_ty`.
                 debug_assert!(!typing_env.param_env.has_infer());
                 let query_ty = tcx
-                    .try_normalize_erasing_regions(typing_env, query_ty)
+                    .try_normalize_erasing_regions(typing_env, Unnormalized::new(query_ty))
                     .unwrap_or_else(|_| tcx.erase_and_anonymize_regions(query_ty));
 
                 tcx.needs_drop_raw(typing_env.as_query_input(query_ty))
@@ -1378,7 +1376,7 @@ impl<'tcx> Ty<'tcx> {
                 // If normalization fails, we just use `query_ty`.
                 debug_assert!(!typing_env.has_infer());
                 let query_ty = tcx
-                    .try_normalize_erasing_regions(typing_env, query_ty)
+                    .try_normalize_erasing_regions(typing_env, Unnormalized::new(query_ty))
                     .unwrap_or_else(|_| tcx.erase_and_anonymize_regions(query_ty));
 
                 tcx.needs_async_drop_raw(typing_env.as_query_input(query_ty))
@@ -1421,7 +1419,7 @@ impl<'tcx> Ty<'tcx> {
                 // This doesn't depend on regions, so try to minimize distinct
                 // query keys used.
                 // FIX: Use try_normalize to avoid crashing. If it fails, return true.
-                tcx.try_normalize_erasing_regions(typing_env, query_ty)
+                tcx.try_normalize_erasing_regions(typing_env, Unnormalized::new(query_ty))
                     .map(|erased| tcx.has_significant_drop_raw(typing_env.as_query_input(erased)))
                     .unwrap_or(true)
             }

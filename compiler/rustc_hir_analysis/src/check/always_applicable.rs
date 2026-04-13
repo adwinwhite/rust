@@ -11,7 +11,7 @@ use rustc_infer::infer::{RegionResolutionError, TyCtxtInferExt};
 use rustc_infer::traits::{ObligationCause, ObligationCauseCode};
 use rustc_middle::span_bug;
 use rustc_middle::ty::util::CheckRegions;
-use rustc_middle::ty::{self, GenericArgsRef, Ty, TyCtxt, TypingMode};
+use rustc_middle::ty::{self, GenericArgsRef, Ty, TyCtxt, TypingMode, Unnormalized};
 use rustc_trait_selection::regions::InferCtxtRegionExt;
 use rustc_trait_selection::traits::{self, ObligationCtxt};
 
@@ -224,7 +224,7 @@ fn ensure_impl_predicates_are_implied_by_item_defn<'tcx>(
         tcx.predicates_of(impl_def_id).instantiate(tcx, fresh_impl_args).skip_normalization()
     {
         let normalize_cause = traits::ObligationCause::misc(span, impl_def_id);
-        let pred = ocx.normalize(&normalize_cause, adt_env, clause);
+        let pred = ocx.normalize(&normalize_cause, adt_env, Unnormalized::new(clause));
         let cause = traits::ObligationCause::new(
             span,
             impl_def_id,

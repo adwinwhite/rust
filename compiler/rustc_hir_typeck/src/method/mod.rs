@@ -15,7 +15,7 @@ use rustc_infer::infer::{BoundRegionConversionTime, InferOk};
 use rustc_infer::traits::PredicateObligations;
 use rustc_middle::traits::ObligationCause;
 use rustc_middle::ty::{
-    self, GenericArgs, GenericArgsRef, GenericParamDefKind, Ty, TypeVisitableExt,
+    self, GenericArgs, GenericArgsRef, GenericParamDefKind, Ty, TypeVisitableExt, Unnormalized,
 };
 use rustc_middle::{bug, span_bug};
 use rustc_span::{ErrorGuaranteed, Ident, Span, Symbol};
@@ -429,7 +429,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         );
 
         let InferOk { value: fn_sig, obligations: o } =
-            self.at(&obligation.cause, self.param_env).normalize(fn_sig);
+            self.at(&obligation.cause, self.param_env).normalize(Unnormalized::new(fn_sig));
         obligations.extend(o);
 
         // Register obligations for the parameters. This will include the
@@ -444,7 +444,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             self.tcx.predicates_of(def_id).instantiate(self.tcx, args).skip_normalization();
 
         let InferOk { value: bounds, obligations: o } =
-            self.at(&obligation.cause, self.param_env).normalize(bounds);
+            self.at(&obligation.cause, self.param_env).normalize(Unnormalized::new(bounds));
         obligations.extend(o);
         assert!(!bounds.has_escaping_bound_vars());
 

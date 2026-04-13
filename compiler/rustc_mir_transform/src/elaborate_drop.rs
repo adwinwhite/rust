@@ -7,7 +7,7 @@ use rustc_index::Idx;
 use rustc_middle::mir::*;
 use rustc_middle::ty::adjustment::PointerCoercion;
 use rustc_middle::ty::util::IntTypeExt;
-use rustc_middle::ty::{self, GenericArg, GenericArgsRef, Ty, TyCtxt};
+use rustc_middle::ty::{self, GenericArg, GenericArgsRef, Ty, TyCtxt, Unnormalized};
 use rustc_middle::{bug, span_bug, traits};
 use rustc_span::{DUMMY_SP, Spanned, dummy_spanned};
 use tracing::{debug, instrument};
@@ -562,7 +562,10 @@ where
                 // We silently leave an unnormalized type here to support polymorphic drop
                 // elaboration for users of rustc internal APIs
                 let field_ty = tcx
-                    .try_normalize_erasing_regions(self.elaborator.typing_env(), field_ty)
+                    .try_normalize_erasing_regions(
+                        self.elaborator.typing_env(),
+                        Unnormalized::new(field_ty),
+                    )
                     .unwrap_or(field_ty);
 
                 (tcx.mk_place_field(base_place, field_idx, field_ty), subpath)

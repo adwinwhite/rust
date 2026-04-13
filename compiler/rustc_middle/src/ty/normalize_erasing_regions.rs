@@ -121,7 +121,7 @@ impl<'tcx> TyCtxt<'tcx> {
         T: TypeFoldable<TyCtxt<'tcx>>,
     {
         let value = self.instantiate_bound_regions_with_erased(value);
-        self.normalize_erasing_regions(typing_env, value)
+        self.normalize_erasing_regions(typing_env, Unnormalized::new(value))
     }
 
     /// Monomorphizes a type from the AST by first applying the
@@ -140,7 +140,7 @@ impl<'tcx> TyCtxt<'tcx> {
         T: TypeFoldable<TyCtxt<'tcx>>,
     {
         let instantiated = value.instantiate(self, param_args).skip_normalization();
-        self.normalize_erasing_regions(typing_env, instantiated)
+        self.normalize_erasing_regions(typing_env, Unnormalized::new(instantiated))
     }
 
     /// Monomorphizes a type from the AST by first applying the
@@ -158,7 +158,7 @@ impl<'tcx> TyCtxt<'tcx> {
         T: TypeFoldable<TyCtxt<'tcx>>,
     {
         let instantiated = value.instantiate(self, param_args).skip_normalization();
-        self.try_normalize_erasing_regions(typing_env, instantiated)
+        self.try_normalize_erasing_regions(typing_env, Unnormalized::new(instantiated))
     }
 }
 

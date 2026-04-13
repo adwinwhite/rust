@@ -18,7 +18,7 @@ use rustc_middle::ty::elaborate::supertrait_def_ids;
 use rustc_middle::ty::fast_reject::{DeepRejectCtxt, TreatParams, simplify_type};
 use rustc_middle::ty::{
     self, AssocContainer, AssocItem, GenericArgs, GenericArgsRef, GenericParamDefKind, ParamEnvAnd,
-    Ty, TyCtxt, TypeVisitableExt, Upcast,
+    Ty, TyCtxt, TypeVisitableExt, Unnormalized, Upcast,
 };
 use rustc_middle::{bug, span_bug};
 use rustc_session::lint;
@@ -1979,7 +1979,8 @@ impl<'a, 'tcx> ProbeContext<'a, 'tcx> {
                         .skip_normalization();
                     (xform_self_ty, xform_ret_ty) =
                         self.xform_self_ty(probe.item, impl_ty, impl_args);
-                    xform_self_ty = ocx.normalize(cause, self.param_env, xform_self_ty);
+                    xform_self_ty =
+                        ocx.normalize(cause, self.param_env, Unnormalized::new(xform_self_ty));
                     match ocx.relate(cause, self.param_env, self.variance(), self_ty, xform_self_ty)
                     {
                         Ok(()) => {}
@@ -1989,7 +1990,8 @@ impl<'a, 'tcx> ProbeContext<'a, 'tcx> {
                         }
                     }
                     // FIXME: Weirdly, we normalize the ret ty in this candidate, but no other candidates.
-                    xform_ret_ty = ocx.normalize(cause, self.param_env, xform_ret_ty);
+                    xform_ret_ty =
+                        ocx.normalize(cause, self.param_env, Unnormalized::new(xform_ret_ty));
                     // Check whether the impl imposes obligations we have to worry about.
                     let impl_def_id = probe.item.container_id(self.tcx);
                     let impl_bounds = self
@@ -1997,7 +1999,8 @@ impl<'a, 'tcx> ProbeContext<'a, 'tcx> {
                         .predicates_of(impl_def_id)
                         .instantiate(self.tcx, impl_args)
                         .skip_normalization();
-                    let impl_bounds = ocx.normalize(cause, self.param_env, impl_bounds);
+                    let impl_bounds =
+                        ocx.normalize(cause, self.param_env, Unnormalized::new(impl_bounds));
                     // Convert the bounds into obligations.
                     ocx.register_obligations(traits::predicates_for_generics(
                         |idx, span| {
@@ -2041,10 +2044,12 @@ impl<'a, 'tcx> ProbeContext<'a, 'tcx> {
                         BoundRegionConversionTime::FnCall,
                         poly_trait_ref,
                     );
-                    let trait_ref = ocx.normalize(cause, self.param_env, trait_ref);
+                    let trait_ref =
+                        ocx.normalize(cause, self.param_env, Unnormalized::new(trait_ref));
                     (xform_self_ty, xform_ret_ty) =
                         self.xform_self_ty(probe.item, trait_ref.self_ty(), trait_ref.args);
-                    xform_self_ty = ocx.normalize(cause, self.param_env, xform_self_ty);
+                    xform_self_ty =
+                        ocx.normalize(cause, self.param_env, Unnormalized::new(xform_self_ty));
                     match self_ty.kind() {
                         // HACK: opaque types will match anything for which their bounds hold.
                         // Thus we need to prevent them from trying to match the `&_` autoref
@@ -2114,7 +2119,7 @@ impl<'a, 'tcx> ProbeContext<'a, 'tcx> {
                         match ocx.structurally_normalize_ty(
                             cause,
                             self.param_env,
-                            trait_ref.self_ty(),
+                            Unnormalized::new(trait_ref.self_ty()),
                         ) {
                             Ok(ty) => {
                                 if !matches!(ty.kind(), ty::Param(_)) {
@@ -2129,7 +2134,8 @@ impl<'a, 'tcx> ProbeContext<'a, 'tcx> {
                         }
                     }
 
-                    xform_self_ty = ocx.normalize(cause, self.param_env, xform_self_ty);
+                    xform_self_ty =
+                        ocx.normalize(cause, self.param_env, Unnormalized::new(xform_self_ty));
                     match ocx.relate(cause, self.param_env, self.variance(), self_ty, xform_self_ty)
                     {
                         Ok(()) => {}
@@ -2192,7 +2198,8 @@ impl<'a, 'tcx> ProbeContext<'a, 'tcx> {
                 // but `self.return_type` is only set on the diagnostic-path, so we
                 // should be okay doing it here.
                 if !matches!(probe.kind, InherentImplCandidate { .. }) {
-                    xform_ret_ty = ocx.normalize(&cause, self.param_env, xform_ret_ty);
+                    xform_ret_ty =
+                        ocx.normalize(&cause, self.param_env, Unnormalized::new(xform_ret_ty));
                 }
 
                 debug!("comparing return_ty {:?} with xform ret ty {:?}", return_ty, xform_ret_ty);

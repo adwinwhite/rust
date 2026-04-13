@@ -6,7 +6,7 @@ use rustc_hir as hir;
 use rustc_hir::{Expr, ExprKind, HirId, LangItem, find_attr};
 use rustc_middle::bug;
 use rustc_middle::ty::layout::{LayoutOf, SizeSkeleton};
-use rustc_middle::ty::{self, Ty, TyCtxt, TypeVisitableExt};
+use rustc_middle::ty::{self, Ty, TyCtxt, TypeVisitableExt, Unnormalized};
 use rustc_session::{declare_lint, declare_lint_pass, impl_lint_pass};
 use rustc_span::{Span, Symbol, sym};
 use tracing::debug;
@@ -711,7 +711,7 @@ fn ty_is_known_nonnull<'tcx>(
     typing_env: ty::TypingEnv<'tcx>,
     ty: Ty<'tcx>,
 ) -> bool {
-    let ty = tcx.try_normalize_erasing_regions(typing_env, ty).unwrap_or(ty);
+    let ty = tcx.try_normalize_erasing_regions(typing_env, Unnormalized::new(ty)).unwrap_or(ty);
 
     match ty.kind() {
         ty::FnPtr(..) => true,
@@ -773,7 +773,7 @@ fn get_nullable_type<'tcx>(
     typing_env: ty::TypingEnv<'tcx>,
     ty: Ty<'tcx>,
 ) -> Option<Ty<'tcx>> {
-    let ty = tcx.try_normalize_erasing_regions(typing_env, ty).unwrap_or(ty);
+    let ty = tcx.try_normalize_erasing_regions(typing_env, Unnormalized::new(ty)).unwrap_or(ty);
 
     Some(match *ty.kind() {
         ty::Adt(field_def, field_args) => {

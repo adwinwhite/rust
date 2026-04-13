@@ -10,7 +10,7 @@ use rustc_macros::extension;
 pub use rustc_middle::traits::query::NormalizationResult;
 use rustc_middle::ty::{
     self, FallibleTypeFolder, Ty, TyCtxt, TypeFoldable, TypeSuperFoldable, TypeSuperVisitable,
-    TypeVisitable, TypeVisitableExt, TypeVisitor, TypingMode,
+    TypeVisitable, TypeVisitableExt, TypeVisitor, TypingMode, Unnormalized,
 };
 use rustc_span::DUMMY_SP;
 use tracing::{debug, info, instrument};
@@ -79,7 +79,9 @@ impl<'a, 'tcx> At<'a, 'tcx> {
 
         if self.infcx.next_trait_solver() {
             match crate::solve::deeply_normalize_with_skipped_universes::<_, ScrubbedTraitError<'tcx>>(
-                self, value, universes,
+                self,
+                Unnormalized::new(value),
+                universes,
             ) {
                 Ok(value) => {
                     return Ok(Normalized { value, obligations: PredicateObligations::new() });

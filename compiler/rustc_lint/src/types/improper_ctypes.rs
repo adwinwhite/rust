@@ -11,7 +11,7 @@ use rustc_hir::{self as hir, AmbigArg};
 use rustc_middle::bug;
 use rustc_middle::ty::{
     self, Adt, AdtDef, AdtKind, GenericArgsRef, Ty, TyCtxt, TypeSuperVisitable, TypeVisitable,
-    TypeVisitableExt,
+    TypeVisitableExt, Unnormalized,
 };
 use rustc_session::{declare_lint, declare_lint_pass};
 use rustc_span::def_id::LocalDefId;
@@ -377,7 +377,7 @@ impl<'a, 'tcx> ImproperCTypesVisitor<'a, 'tcx> {
         let field_ty = self
             .cx
             .tcx
-            .try_normalize_erasing_regions(self.cx.typing_env(), field_ty)
+            .try_normalize_erasing_regions(self.cx.typing_env(), Unnormalized::new(field_ty))
             .unwrap_or(field_ty);
         self.visit_type(state, field_ty)
     }
@@ -727,7 +727,7 @@ impl<'a, 'tcx> ImproperCTypesVisitor<'a, 'tcx> {
         if let Some(ty) = self
             .cx
             .tcx
-            .try_normalize_erasing_regions(self.cx.typing_env(), ty)
+            .try_normalize_erasing_regions(self.cx.typing_env(), Unnormalized::new(ty))
             .unwrap_or(ty)
             .visit_with(&mut ProhibitOpaqueTypes)
             .break_value()
@@ -761,7 +761,11 @@ impl<'a, 'tcx> ImproperCTypesVisitor<'a, 'tcx> {
             return res;
         }
 
-        let ty = self.cx.tcx.try_normalize_erasing_regions(self.cx.typing_env(), ty).unwrap_or(ty);
+        let ty = self
+            .cx
+            .tcx
+            .try_normalize_erasing_regions(self.cx.typing_env(), Unnormalized::new(ty))
+            .unwrap_or(ty);
 
         // C doesn't really support passing arrays by value - the only way to pass an array by value
         // is through a struct. So, first test that the top level isn't an array, and then

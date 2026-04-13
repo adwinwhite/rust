@@ -24,7 +24,7 @@ where
     T: TypeFoldable<TyCtxt<'tcx>>,
     E: FromSolverError<'tcx, NextSolverError<'tcx>>,
 {
-    assert!(!value.has_escaping_bound_vars());
+    assert!(!value.apply(|v| v.has_escaping_bound_vars()));
     deeply_normalize_with_skipped_universes(at, value, vec![])
 }
 
@@ -268,7 +268,7 @@ impl<'tcx> TypeFolder<TyCtxt<'tcx>> for DeeplyNormalizeForDiagnosticsFolder<'_, 
         let result: Result<_, Vec<ScrubbedTraitError<'tcx>>> = infcx.commit_if_ok(|_| {
             deeply_normalize_with_skipped_universes_and_ambiguous_coroutine_goals(
                 self.at,
-                ty,
+                Unnormalized::new(ty),
                 vec![None; ty.outer_exclusive_binder().as_usize()],
             )
         });
@@ -283,7 +283,7 @@ impl<'tcx> TypeFolder<TyCtxt<'tcx>> for DeeplyNormalizeForDiagnosticsFolder<'_, 
         let result: Result<_, Vec<ScrubbedTraitError<'tcx>>> = infcx.commit_if_ok(|_| {
             deeply_normalize_with_skipped_universes_and_ambiguous_coroutine_goals(
                 self.at,
-                ct,
+                Unnormalized::new(ct),
                 vec![None; ct.outer_exclusive_binder().as_usize()],
             )
         });

@@ -18,7 +18,7 @@ use rustc_index::IndexVec;
 use rustc_infer::infer::{BoundRegionConversionTime, DefineOpaqueTypes, InferOk, TypeTrace};
 use rustc_middle::ty::adjustment::AllowTwoPhase;
 use rustc_middle::ty::error::TypeError;
-use rustc_middle::ty::{self, IsSuggestable, Ty, TyCtxt, TypeVisitableExt};
+use rustc_middle::ty::{self, IsSuggestable, Ty, TyCtxt, TypeVisitableExt, Unnormalized};
 use rustc_middle::{bug, span_bug};
 use rustc_session::Session;
 use rustc_span::{DUMMY_SP, Ident, Span, kw, sym};
@@ -95,8 +95,10 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 // as otherwise we can wind up conservatively proving `Copy` which may
                 // infer the repeat expr count to something that never required `Copy` in
                 // the first place.
-                let count = self
-                    .structurally_resolve_const(element.span, self.normalize(element.span, count));
+                let count = self.structurally_resolve_const(
+                    element.span,
+                    self.normalize(element.span, Unnormalized::new(count)),
+                );
 
                 // Avoid run on "`NotCopy: Copy` is not implemented" errors when the
                 // repeat expr count is erroneous/unknown. The user might wind up

@@ -963,7 +963,7 @@ impl<'f, 'tcx> Coerce<'f, 'tcx> {
                 let a_sig = self.sig_for_fn_def_coercion(a, Some(b_hdr.safety))?;
 
                 let InferOk { value: a_sig, mut obligations } =
-                    self.at(&self.cause, self.param_env).normalize(a_sig);
+                    self.at(&self.cause, self.param_env).normalize(Unnormalized::new(a_sig));
                 let a = Ty::new_fn_ptr(self.tcx, a_sig);
 
                 let adjust = Adjust::Pointer(PointerCoercion::ReifyFnPointer(b_hdr.safety));
@@ -1104,7 +1104,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 if self.next_trait_solver()
                     && let ty::Alias(..) = ty.kind()
                 {
-                    ocx.structurally_normalize_ty(&cause, self.param_env, ty)
+                    ocx.structurally_normalize_ty(&cause, self.param_env, Unnormalized::new(ty))
                 } else {
                     Ok(ty)
                 }
@@ -1336,7 +1336,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             };
 
             // The signature must match.
-            let (a_sig, b_sig) = self.normalize(new.span, (a_sig, b_sig));
+            let (a_sig, b_sig) = self.normalize(new.span, Unnormalized::new((a_sig, b_sig)));
             let sig = self
                 .at(cause, self.param_env)
                 .lub(a_sig, b_sig)

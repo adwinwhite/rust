@@ -3,7 +3,7 @@ use rustc_hir::def::DefKind;
 use rustc_hir::def_id::LocalDefId;
 use rustc_hir::{find_attr, intravisit};
 use rustc_middle::hir::nested_filter;
-use rustc_middle::ty::{self, TyCtxt, TypeVisitableExt};
+use rustc_middle::ty::{self, TyCtxt, TypeVisitableExt, Unnormalized};
 use rustc_span::sym;
 
 pub(crate) fn opaque_hidden_types(tcx: TyCtxt<'_>) {
@@ -139,9 +139,10 @@ pub(crate) fn vtables<'tcx>(tcx: TyCtxt<'tcx>) {
                     );
                     continue;
                 }
-                let Ok(trait_ref) = tcx
-                    .try_normalize_erasing_regions(ty::TypingEnv::fully_monomorphized(), trait_ref)
-                else {
+                let Ok(trait_ref) = tcx.try_normalize_erasing_regions(
+                    ty::TypingEnv::fully_monomorphized(),
+                    Unnormalized::new(trait_ref),
+                ) else {
                     tcx.dcx().span_err(
                         attr_span,
                         "`rustc_dump_vtable` applied to impl header that cannot be normalized",
@@ -159,9 +160,10 @@ pub(crate) fn vtables<'tcx>(tcx: TyCtxt<'tcx>) {
                     );
                     continue;
                 }
-                let Ok(ty) =
-                    tcx.try_normalize_erasing_regions(ty::TypingEnv::fully_monomorphized(), ty)
-                else {
+                let Ok(ty) = tcx.try_normalize_erasing_regions(
+                    ty::TypingEnv::fully_monomorphized(),
+                    Unnormalized::new(ty),
+                ) else {
                     tcx.dcx().span_err(
                         attr_span,
                         "`rustc_dump_vtable` applied to type alias that cannot be normalized",

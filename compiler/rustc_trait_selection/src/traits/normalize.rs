@@ -62,6 +62,7 @@ impl<'tcx> At<'_, 'tcx> {
         E: FromSolverError<'tcx, NextSolverError<'tcx>>,
     {
         if self.infcx.next_trait_solver() {
+            let value = value.inside_norm();
             crate::solve::deeply_normalize(self, value)
         } else {
             if fulfill_cx.has_pending_obligations() {

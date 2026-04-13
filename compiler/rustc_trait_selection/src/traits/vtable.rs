@@ -237,7 +237,10 @@ fn vtable_entries<'tcx>(
 ) -> &'tcx [VtblEntry<'tcx>] {
     debug_assert!(!trait_ref.has_non_region_infer() && !trait_ref.has_non_region_param());
     debug_assert_eq!(
-        tcx.normalize_erasing_regions(ty::TypingEnv::fully_monomorphized(), trait_ref),
+        tcx.normalize_erasing_regions(
+            ty::TypingEnv::fully_monomorphized(),
+            Unnormalized::new(trait_ref)
+        ),
         trait_ref,
         "vtable trait ref should be normalized"
     );
@@ -263,16 +266,19 @@ fn vtable_entries<'tcx>(
 
                     // The method may have some early-bound lifetimes; add regions for those.
                     // FIXME: Is this normalize needed?
-                    let args = tcx.normalize_erasing_regions(
-                        ty::TypingEnv::fully_monomorphized(),
-                        GenericArgs::for_item(tcx, def_id, |param, _| match param.kind {
-                            GenericParamDefKind::Lifetime => tcx.lifetimes.re_erased.into(),
-                            GenericParamDefKind::Type { .. }
-                            | GenericParamDefKind::Const { .. } => {
-                                trait_ref.args[param.index as usize]
-                            }
-                        }),
-                    );
+                    let args =
+                        tcx.normalize_erasing_regions(
+                            ty::TypingEnv::fully_monomorphized(),
+                            Unnormalized::new(GenericArgs::for_item(tcx, def_id, |param, _| {
+                                match param.kind {
+                                    GenericParamDefKind::Lifetime => tcx.lifetimes.re_erased.into(),
+                                    GenericParamDefKind::Type { .. }
+                                    | GenericParamDefKind::Const { .. } => {
+                                        trait_ref.args[param.index as usize]
+                                    }
+                                }
+                            })),
+                        );
 
                     // It's possible that the method relies on where-clauses that
                     // do not hold for this particular set of type parameters.
@@ -322,7 +328,7 @@ fn vtable_entries<'tcx>(
 pub(crate) fn first_method_vtable_slot<'tcx>(tcx: TyCtxt<'tcx>, key: ty::TraitRef<'tcx>) -> usize {
     debug_assert!(!key.has_non_region_infer() && !key.has_non_region_param());
     debug_assert_eq!(
-        tcx.normalize_erasing_regions(ty::TypingEnv::fully_monomorphized(), key),
+        tcx.normalize_erasing_regions(ty::TypingEnv::fully_monomorphized(), Unnormalized::new(key)),
         key,
         "vtable trait ref should be normalized"
     );
@@ -386,7 +392,7 @@ pub(crate) fn supertrait_vtable_slot<'tcx>(
 ) -> Option<usize> {
     debug_assert!(!key.has_non_region_infer() && !key.has_non_region_param());
     debug_assert_eq!(
-        tcx.normalize_erasing_regions(ty::TypingEnv::fully_monomorphized(), key),
+        tcx.normalize_erasing_regions(ty::TypingEnv::fully_monomorphized(), Unnormalized::new(key)),
         key,
         "upcasting trait refs should be normalized"
     );

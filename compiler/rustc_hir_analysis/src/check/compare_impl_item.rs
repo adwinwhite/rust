@@ -278,7 +278,7 @@ fn compare_method_predicate_entailment<'tcx>(
         impl_m_predicates.instantiate_own_identity().map(Unnormalized::skip_normalization);
     for (predicate, span) in impl_m_own_bounds {
         let normalize_cause = traits::ObligationCause::misc(span, impl_m_def_id);
-        let predicate = ocx.normalize(&normalize_cause, param_env, predicate);
+        let predicate = ocx.normalize(&normalize_cause, param_env, Unnormalized::new(predicate));
 
         let cause = ObligationCause::new(
             span,
@@ -305,7 +305,8 @@ fn compare_method_predicate_entailment<'tcx>(
             .map(Unnormalized::skip_normalization)
         {
             let normalize_cause = traits::ObligationCause::misc(span, impl_m_def_id);
-            let const_condition = ocx.normalize(&normalize_cause, param_env, const_condition);
+            let const_condition =
+                ocx.normalize(&normalize_cause, param_env, Unnormalized::new(const_condition));
 
             let cause = ObligationCause::new(
                 span,
@@ -342,7 +343,7 @@ fn compare_method_predicate_entailment<'tcx>(
     );
 
     let norm_cause = ObligationCause::misc(impl_m_span, impl_m_def_id);
-    let impl_sig = ocx.normalize(&norm_cause, param_env, unnormalized_impl_sig);
+    let impl_sig = ocx.normalize(&norm_cause, param_env, Unnormalized::new(unnormalized_impl_sig));
     debug!(?impl_sig);
 
     let trait_sig =
@@ -353,7 +354,7 @@ fn compare_method_predicate_entailment<'tcx>(
     // we have to do this before normalization, since the normalized ty may
     // not contain the input parameters. See issue #87748.
     wf_tys.extend(trait_sig.inputs_and_output.iter());
-    let trait_sig = ocx.normalize(&norm_cause, param_env, trait_sig);
+    let trait_sig = ocx.normalize(&norm_cause, param_env, Unnormalized::new(trait_sig));
     // We also have to add the normalized trait signature
     // as we don't normalize during implied bounds computation.
     wf_tys.extend(trait_sig.inputs_and_output.iter());
@@ -535,7 +536,7 @@ pub(super) fn collect_return_position_impl_trait_in_trait_tys<'tcx>(
         .map(Unnormalized::skip_normalization);
     for (predicate, span) in impl_m_own_bounds {
         let normalize_cause = traits::ObligationCause::misc(span, impl_m_def_id);
-        let predicate = ocx.normalize(&normalize_cause, param_env, predicate);
+        let predicate = ocx.normalize(&normalize_cause, param_env, Unnormalized::new(predicate));
 
         let cause = ObligationCause::new(
             span,
@@ -554,11 +555,11 @@ pub(super) fn collect_return_position_impl_trait_in_trait_tys<'tcx>(
     let impl_sig = ocx.normalize(
         &misc_cause,
         param_env,
-        infcx.instantiate_binder_with_fresh_vars(
+        Unnormalized::new(infcx.instantiate_binder_with_fresh_vars(
             return_span,
             BoundRegionConversionTime::HigherRankedType,
             tcx.fn_sig(impl_m.def_id).instantiate_identity().skip_normalization(),
-        ),
+        )),
     );
     impl_sig.error_reported()?;
     let impl_return_ty = impl_sig.output();
@@ -575,7 +576,8 @@ pub(super) fn collect_return_position_impl_trait_in_trait_tys<'tcx>(
         )
         .fold_with(&mut collector);
 
-    let trait_sig = ocx.normalize(&misc_cause, param_env, unnormalized_trait_sig);
+    let trait_sig =
+        ocx.normalize(&misc_cause, param_env, Unnormalized::new(unnormalized_trait_sig));
     trait_sig.error_reported()?;
     let trait_return_ty = trait_sig.output();
 
@@ -867,7 +869,7 @@ where
                 let pred = self.ocx.normalize(
                     &ObligationCause::misc(self.span, self.body_id),
                     self.param_env,
-                    pred,
+                    Unnormalized::new(pred),
                 );
 
                 self.ocx.register_obligation(traits::Obligation::new(
@@ -2272,17 +2274,17 @@ fn compare_const_predicate_entailment<'tcx>(
         impl_ct_predicates.instantiate_own_identity().map(Unnormalized::skip_normalization);
     for (predicate, span) in impl_ct_own_bounds {
         let cause = ObligationCause::misc(span, impl_ct_def_id);
-        let predicate = ocx.normalize(&cause, param_env, predicate);
+        let predicate = ocx.normalize(&cause, param_env, Unnormalized::new(predicate));
 
         let cause = ObligationCause::new(span, impl_ct_def_id, code.clone());
         ocx.register_obligation(traits::Obligation::new(tcx, cause, param_env, predicate));
     }
 
     // There is no "body" here, so just pass dummy id.
-    let impl_ty = ocx.normalize(&cause, param_env, impl_ty);
+    let impl_ty = ocx.normalize(&cause, param_env, Unnormalized::new(impl_ty));
     debug!(?impl_ty);
 
-    let trait_ty = ocx.normalize(&cause, param_env, trait_ty);
+    let trait_ty = ocx.normalize(&cause, param_env, Unnormalized::new(trait_ty));
     debug!(?trait_ty);
 
     let err = ocx.sup(&cause, param_env, trait_ty, impl_ty);
@@ -2425,7 +2427,7 @@ fn compare_type_predicate_entailment<'tcx>(
 
     for (predicate, span) in impl_ty_own_bounds {
         let cause = ObligationCause::misc(span, impl_ty_def_id);
-        let predicate = ocx.normalize(&cause, param_env, predicate);
+        let predicate = ocx.normalize(&cause, param_env, Unnormalized::new(predicate));
 
         let cause = ObligationCause::new(
             span,
@@ -2447,7 +2449,8 @@ fn compare_type_predicate_entailment<'tcx>(
             .map(Unnormalized::skip_normalization);
         for (const_condition, span) in impl_ty_own_const_conditions {
             let normalize_cause = traits::ObligationCause::misc(span, impl_ty_def_id);
-            let const_condition = ocx.normalize(&normalize_cause, param_env, const_condition);
+            let const_condition =
+                ocx.normalize(&normalize_cause, param_env, Unnormalized::new(const_condition));
 
             let cause = ObligationCause::new(
                 span,
@@ -2585,7 +2588,11 @@ pub(super) fn check_type_bounds<'tcx>(
     // See <https://github.com/rust-lang/rust/pull/117542#issue-1976337685>.
     let normalize_param_env = param_env_with_gat_bounds(tcx, impl_ty, impl_trait_ref);
     for obligation in &mut obligations {
-        match ocx.deeply_normalize(&normalize_cause, normalize_param_env, obligation.predicate) {
+        match ocx.deeply_normalize(
+            &normalize_cause,
+            normalize_param_env,
+            Unnormalized::new(obligation.predicate),
+        ) {
             Ok(pred) => obligation.predicate = pred,
             Err(e) => {
                 return Err(infcx.err_ctxt().report_fulfillment_errors(e));

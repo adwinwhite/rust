@@ -145,7 +145,7 @@ fn allowed_union_or_unsafe_field<'tcx>(
         .lang_items()
         .get(LangItem::BikeshedGuaranteedNoDrop)
         .unwrap_or_else(|| tcx.require_lang_item(LangItem::Copy, span));
-    let Ok(ty) = tcx.try_normalize_erasing_regions(typing_env, ty) else {
+    let Ok(ty) = tcx.try_normalize_erasing_regions(typing_env, Unnormalized::new(ty)) else {
         tcx.dcx().span_delayed_bug(span, "could not normalize field type");
         return true;
     };
@@ -923,7 +923,11 @@ pub(crate) fn check_item_type(tcx: TyCtxt<'_>, def_id: LocalDefId) -> Result<(),
             res = res.and(enter_wf_checking_ctxt(tcx, def_id, |wfcx| {
                 let ty = tcx.type_of(def_id).instantiate_identity().skip_normalization();
                 let ty_span = tcx.ty_span(def_id);
-                let ty = wfcx.deeply_normalize(ty_span, Some(WellFormedLoc::Ty(def_id)), ty);
+                let ty = wfcx.deeply_normalize(
+                    ty_span,
+                    Some(WellFormedLoc::Ty(def_id)),
+                    Unnormalized::new(ty),
+                );
                 wfcx.register_wf_obligation(ty_span, Some(WellFormedLoc::Ty(def_id)), ty.into());
                 wfcx.register_bound(
                     traits::ObligationCause::new(
@@ -957,7 +961,11 @@ pub(crate) fn check_item_type(tcx: TyCtxt<'_>, def_id: LocalDefId) -> Result<(),
             let span = tcx.def_span(def_id);
             if tcx.type_alias_is_lazy(def_id) {
                 res = res.and(enter_wf_checking_ctxt(tcx, def_id, |wfcx| {
-                    let item_ty = wfcx.deeply_normalize(span, Some(WellFormedLoc::Ty(def_id)), ty);
+                    let item_ty = wfcx.deeply_normalize(
+                        span,
+                        Some(WellFormedLoc::Ty(def_id)),
+                        Unnormalized::new(ty),
+                    );
                     wfcx.register_wf_obligation(
                         span,
                         Some(WellFormedLoc::Ty(def_id)),
@@ -1795,7 +1803,7 @@ pub(super) fn check_transparent<'tcx>(tcx: TyCtxt<'tcx>, adt: ty::AdtDef<'tcx>) 
         ty: Ty<'tcx>,
     ) -> ControlFlow<UnsuitedInfo<'tcx>> {
         // We can encounter projections during traversal, so ensure the type is normalized.
-        let ty = tcx.try_normalize_erasing_regions(typing_env, ty).unwrap_or(ty);
+        let ty = tcx.try_normalize_erasing_regions(typing_env, Unnormalized::new(ty)).unwrap_or(ty);
         match ty.kind() {
             ty::Tuple(list) => list.iter().try_for_each(|t| check_unsuited(tcx, typing_env, t)),
             ty::Array(ty, _) => check_unsuited(tcx, typing_env, *ty),

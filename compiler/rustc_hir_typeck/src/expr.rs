@@ -28,7 +28,7 @@ use rustc_infer::infer::{self, DefineOpaqueTypes, InferOk, RegionVariableOrigin}
 use rustc_infer::traits::query::NoSolution;
 use rustc_middle::ty::adjustment::{Adjust, Adjustment, AllowTwoPhase};
 use rustc_middle::ty::error::{ExpectedFound, TypeError};
-use rustc_middle::ty::{self, AdtKind, GenericArgsRef, Ty, TypeVisitableExt};
+use rustc_middle::ty::{self, AdtKind, GenericArgsRef, Ty, TypeVisitableExt, Unnormalized};
 use rustc_middle::{bug, span_bug};
 use rustc_session::errors::ExprParenthesesNeeded;
 use rustc_session::parse::feature_err;
@@ -1743,7 +1743,10 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let count_span = count.span;
         let count = self.try_structurally_resolve_const(
             count_span,
-            self.normalize(count_span, self.lower_const_arg(count, tcx.types.usize)),
+            self.normalize(
+                count_span,
+                Unnormalized::new(self.lower_const_arg(count, tcx.types.usize)),
+            ),
         );
 
         if let Some(count) = count.try_to_target_usize(tcx) {
@@ -2064,12 +2067,12 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     ty::Adt(adt, args) if adt.is_struct() => variant
                         .fields
                         .iter()
-                        .map(|f| self.normalize(span, f.ty(self.tcx, args)))
+                        .map(|f| self.normalize(span, Unnormalized::new(f.ty(self.tcx, args))))
                         .collect(),
                     ty::Adt(adt, args) if adt.is_enum() => variant
                         .fields
                         .iter()
-                        .map(|f| self.normalize(span, f.ty(self.tcx, args)))
+                        .map(|f| self.normalize(span, Unnormalized::new(f.ty(self.tcx, args))))
                         .collect(),
                     _ => {
                         self.dcx().emit_err(FunctionalRecordUpdateOnNonStruct { span });
@@ -2095,7 +2098,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                             .map(|f| {
                                 let fru_ty = self.normalize(
                                     expr.span,
-                                    self.field_ty(base_expr.span, f, fresh_args),
+                                    Unnormalized::new(self.field_ty(base_expr.span, f, fresh_args)),
                                 );
                                 let ident =
                                     self.tcx.adjust_ident(f.ident(self.tcx), variant.def_id);
@@ -2180,7 +2183,9 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         ty::Adt(adt, args) if adt.is_struct() => variant
                             .fields
                             .iter()
-                            .map(|f| self.normalize(expr.span, f.ty(self.tcx, args)))
+                            .map(|f| {
+                                self.normalize(expr.span, Unnormalized::new(f.ty(self.tcx, args)))
+                            })
                             .collect(),
                         _ => {
                             self.dcx().emit_err(FunctionalRecordUpdateOnNonStruct {
@@ -3561,7 +3566,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
             // Match the impl self type against the base ty. If this fails,
             // we just skip this impl, since it's not particularly useful.
-            let impl_trait_ref = ocx.normalize(&cause, self.param_env, impl_trait_ref);
+            let impl_trait_ref =
+                ocx.normalize(&cause, self.param_env, Unnormalized::new(impl_trait_ref));
             ocx.eq(&cause, self.param_env, base_ty, impl_trait_ref.self_ty())?;
 
             // Register the impl's predicates. One of these predicates
@@ -3596,11 +3602,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             let element_ty = ocx.normalize(
                 &cause,
                 self.param_env,
-                Ty::new_projection_from_args(
+                Unnormalized::new(Ty::new_projection_from_args(
                     self.tcx,
                     index_trait_output_def_id,
                     impl_trait_ref.args,
-                ),
+                )),
             );
 
             let true_errors = ocx.try_evaluate_obligations();

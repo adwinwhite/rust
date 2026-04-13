@@ -35,7 +35,7 @@ use rustc_middle::middle::resolve_bound_vars::ObjectLifetimeDefault;
 use rustc_middle::query::Providers;
 use rustc_middle::traits::ObligationCause;
 use rustc_middle::ty::error::{ExpectedFound, TypeError};
-use rustc_middle::ty::{self, TyCtxt, TypingMode};
+use rustc_middle::ty::{self, TyCtxt, TypingMode, Unnormalized};
 use rustc_middle::{bug, span_bug};
 use rustc_session::config::CrateType;
 use rustc_session::lint;
@@ -1725,7 +1725,7 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
         );
 
         let mut cause = ObligationCause::misc(span, def_id);
-        let sig = ocx.normalize(&cause, param_env, sig);
+        let sig = ocx.normalize(&cause, param_env, Unnormalized::new(sig));
 
         // proc macro is not WF.
         let errors = ocx.try_evaluate_obligations();

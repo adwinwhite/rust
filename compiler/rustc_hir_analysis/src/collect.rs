@@ -34,7 +34,8 @@ use rustc_middle::hir::nested_filter;
 use rustc_middle::query::Providers;
 use rustc_middle::ty::util::{Discr, IntTypeExt};
 use rustc_middle::ty::{
-    self, AdtKind, Const, IsSuggestable, Ty, TyCtxt, TypeVisitableExt, TypingMode, fold_regions,
+    self, AdtKind, Const, IsSuggestable, Ty, TyCtxt, TypeVisitableExt, TypingMode, Unnormalized,
+    fold_regions,
 };
 use rustc_middle::{bug, span_bug};
 use rustc_span::{DUMMY_SP, Ident, Span, Symbol, kw, sym};
@@ -1344,7 +1345,7 @@ pub fn suggest_impl_trait<'tcx>(
             let item_ty = ocx.normalize(
                 &ObligationCause::dummy(),
                 param_env,
-                Ty::new_projection_from_args(infcx.tcx, assoc_item_def_id, args),
+                Unnormalized::new(Ty::new_projection_from_args(infcx.tcx, assoc_item_def_id, args)),
             );
             // FIXME(compiler-errors): We may benefit from resolving regions here.
             if ocx.try_evaluate_obligations().is_empty()

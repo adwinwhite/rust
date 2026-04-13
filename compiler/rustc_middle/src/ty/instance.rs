@@ -883,7 +883,7 @@ impl<'tcx> Instance<'tcx> {
         if let Some(args) = self.args_for_mir_body() {
             tcx.instantiate_and_normalize_erasing_regions(args, typing_env, v)
         } else {
-            tcx.normalize_erasing_regions(typing_env, v.instantiate_identity().skip_normalization())
+            tcx.normalize_erasing_regions(typing_env, v.instantiate_identity())
         }
     }
 
@@ -906,10 +906,7 @@ impl<'tcx> Instance<'tcx> {
             // instantiation of the `FnDef`, so the MIR body
             // is already instantiated. Any generic parameters it
             // contains are generic parameters from the caller.
-            tcx.try_normalize_erasing_regions(
-                typing_env,
-                v.instantiate_identity().skip_normalization(),
-            )
+            tcx.try_normalize_erasing_regions(typing_env, v.instantiate_identity())
         }
     }
 }

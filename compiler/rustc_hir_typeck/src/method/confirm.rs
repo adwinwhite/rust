@@ -23,7 +23,7 @@ use rustc_middle::ty::adjustment::{
 };
 use rustc_middle::ty::{
     self, AssocContainer, GenericArgs, GenericArgsRef, GenericParamDefKind, Ty, TyCtxt,
-    TypeFoldable, TypeVisitableExt, UserArgs,
+    TypeFoldable, TypeVisitableExt, Unnormalized, UserArgs,
 };
 use rustc_middle::{bug, span_bug};
 use rustc_span::{DUMMY_SP, Span};
@@ -140,7 +140,7 @@ impl<'a, 'tcx> ConfirmContext<'a, 'tcx> {
         // traits, no trait system method can be called before this point because they
         // could alter our Self-type, except for normalizing the receiver from the
         // signature (which is also done during probing).
-        let method_sig_rcvr = self.normalize(self.span, method_sig.inputs()[0]);
+        let method_sig_rcvr = self.normalize(self.span, Unnormalized::new(method_sig.inputs()[0]));
         debug!(
             "confirm: self_ty={:?} method_sig_rcvr={:?} method_sig={:?} method_predicates={:?}",
             self_ty, method_sig_rcvr, method_sig, method_predicates
@@ -148,7 +148,7 @@ impl<'a, 'tcx> ConfirmContext<'a, 'tcx> {
         self.unify_receivers(self_ty, method_sig_rcvr, pick);
 
         let (method_sig, method_predicates) =
-            self.normalize(self.span, (method_sig, method_predicates));
+            self.normalize(self.span, Unnormalized::new((method_sig, method_predicates)));
 
         // Make sure nobody calls `drop()` explicitly.
         self.check_for_illegal_method_calls(pick);
@@ -537,7 +537,7 @@ impl<'a, 'tcx> ConfirmContext<'a, 'tcx> {
             }
         }
 
-        self.normalize(self.span, args)
+        self.normalize(self.span, Unnormalized::new(args))
     }
 
     fn unify_receivers(

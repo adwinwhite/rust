@@ -10,7 +10,7 @@ use rustc_middle::query::Providers;
 use rustc_middle::ty::layout::{
     FnAbiError, HasTyCtxt, HasTypingEnv, LayoutCx, LayoutOf, TyAndLayout, fn_can_unwind,
 };
-use rustc_middle::ty::{self, InstanceKind, Ty, TyCtxt};
+use rustc_middle::ty::{self, InstanceKind, Ty, TyCtxt, Unnormalized};
 use rustc_span::DUMMY_SP;
 use rustc_span::def_id::DefId;
 use rustc_target::callconv::{
@@ -269,7 +269,7 @@ impl<'tcx> FnAbiDesc<'tcx> {
             layout_cx: LayoutCx::new(tcx, typing_env),
             sig: tcx.normalize_erasing_regions(
                 typing_env,
-                tcx.instantiate_bound_regions_with_erased(sig),
+                Unnormalized::new(tcx.instantiate_bound_regions_with_erased(sig)),
             ),
             // Parameter attributes can never be deduced for indirect calls, as there is no
             // function body available to use.
@@ -291,7 +291,7 @@ impl<'tcx> FnAbiDesc<'tcx> {
             layout_cx: LayoutCx::new(tcx, typing_env),
             sig: tcx.normalize_erasing_regions(
                 typing_env,
-                fn_sig_for_fn_abi(tcx, instance, typing_env),
+                Unnormalized::new(fn_sig_for_fn_abi(tcx, instance, typing_env)),
             ),
             // Parameter attributes can be deduced from the bodies of neither:
             // - virtual calls, as they might call other functions from the vtable; nor

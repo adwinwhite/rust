@@ -18,7 +18,7 @@ use rustc_middle::ty::layout::IntegerExt;
 use rustc_middle::ty::print::{Print, PrintError, Printer};
 use rustc_middle::ty::{
     self, FloatTy, GenericArg, GenericArgKind, Instance, IntTy, ReifyReason, Ty, TyCtxt,
-    TypeVisitable, TypeVisitableExt, UintTy,
+    TypeVisitable, TypeVisitableExt, UintTy, Unnormalized,
 };
 use rustc_span::sym;
 
@@ -30,7 +30,10 @@ pub(super) fn mangle<'tcx>(
 ) -> String {
     let def_id = instance.def_id();
     // FIXME(eddyb) this should ideally not be needed.
-    let args = tcx.normalize_erasing_regions(ty::TypingEnv::fully_monomorphized(), instance.args);
+    let args = tcx.normalize_erasing_regions(
+        ty::TypingEnv::fully_monomorphized(),
+        Unnormalized::new(instance.args),
+    );
 
     let prefix = "_R";
     let mut p: V0SymbolMangler<'_> = V0SymbolMangler {
@@ -364,11 +367,14 @@ impl<'tcx> Printer<'tcx> for V0SymbolMangler<'tcx> {
         match &mut impl_trait_ref {
             Some(impl_trait_ref) => {
                 assert_eq!(impl_trait_ref.self_ty(), self_ty);
-                *impl_trait_ref = self.tcx.normalize_erasing_regions(typing_env, *impl_trait_ref);
+                *impl_trait_ref = self
+                    .tcx
+                    .normalize_erasing_regions(typing_env, Unnormalized::new(*impl_trait_ref));
                 self_ty = impl_trait_ref.self_ty();
             }
             None => {
-                self_ty = self.tcx.normalize_erasing_regions(typing_env, self_ty);
+                self_ty =
+                    self.tcx.normalize_erasing_regions(typing_env, Unnormalized::new(self_ty));
             }
         }
 

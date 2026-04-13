@@ -15,7 +15,7 @@ use rustc_middle::mir::visit::Visitor;
 use rustc_middle::mir::*;
 use rustc_middle::span_bug;
 use rustc_middle::ty::adjustment::PointerCoercion;
-use rustc_middle::ty::{self, Ty, TypeVisitableExt};
+use rustc_middle::ty::{self, Ty, TypeVisitableExt, Unnormalized};
 use rustc_mir_dataflow::Analysis;
 use rustc_mir_dataflow::impls::{MaybeStorageLive, always_storage_live_locals};
 use rustc_span::{Span, Symbol, sym};
@@ -400,8 +400,11 @@ impl<'mir, 'tcx> Checker<'mir, 'tcx> {
                 ty::BoundConstness::Const
             }
         };
-        let const_conditions =
-            ocx.normalize(&ObligationCause::misc(call_span, body_id), param_env, const_conditions);
+        let const_conditions = ocx.normalize(
+            &ObligationCause::misc(call_span, body_id),
+            param_env,
+            Unnormalized::new(const_conditions),
+        );
         ocx.register_obligations(const_conditions.into_iter().map(|(trait_ref, span)| {
             Obligation::new(
                 tcx,

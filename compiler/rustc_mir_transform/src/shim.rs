@@ -9,7 +9,7 @@ use rustc_middle::mir::visit::{MutVisitor, PlaceContext};
 use rustc_middle::mir::*;
 use rustc_middle::query::Providers;
 use rustc_middle::ty::{
-    self, CoroutineArgs, CoroutineArgsExt, EarlyBinder, GenericArgs, Ty, TyCtxt,
+    self, CoroutineArgs, CoroutineArgsExt, EarlyBinder, GenericArgs, Ty, TyCtxt, Unnormalized,
 };
 use rustc_middle::{bug, span_bug};
 use rustc_span::{DUMMY_SP, Span, Spanned, dummy_spanned};
@@ -1040,7 +1040,7 @@ pub(super) fn build_adt_ctor(tcx: TyCtxt<'_>, ctor_id: DefId) -> Body<'_> {
         .skip_normalization()
         .no_bound_vars()
         .expect("LBR in ADT constructor signature");
-    let sig = tcx.normalize_erasing_regions(typing_env, sig);
+    let sig = tcx.normalize_erasing_regions(typing_env, Unnormalized::new(sig));
 
     let ty::Adt(adt_def, args) = sig.output().kind() else {
         bug!("unexpected type for ADT ctor {:?}", sig.output());

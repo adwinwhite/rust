@@ -104,7 +104,7 @@ impl<'tcx> WfCheckingCtxt<'_, 'tcx> {
                 Ok(value) => value,
                 Err(errors) => {
                     self.infcx.err_ctxt().report_fulfillment_errors(errors);
-                    value
+                    value.skip_normalization()
                 }
             }
         } else {
@@ -978,7 +978,11 @@ pub(crate) fn check_associated_item(
         match item.kind {
             ty::AssocKind::Const { .. } => {
                 let ty = tcx.type_of(def_id).instantiate_identity().skip_normalization();
-                let ty = wfcx.deeply_normalize(span, Some(WellFormedLoc::Ty(def_id)), ty);
+                let ty = wfcx.deeply_normalize(
+                    span,
+                    Some(WellFormedLoc::Ty(def_id)),
+                    Unnormalized::new(ty),
+                );
                 wfcx.register_wf_obligation(span, loc, ty.into());
 
                 let has_value = item.defaultness(tcx).has_value();
@@ -1011,7 +1015,11 @@ pub(crate) fn check_associated_item(
                 }
                 if item.defaultness(tcx).has_value() {
                     let ty = tcx.type_of(def_id).instantiate_identity().skip_normalization();
-                    let ty = wfcx.deeply_normalize(span, Some(WellFormedLoc::Ty(def_id)), ty);
+                    let ty = wfcx.deeply_normalize(
+                        span,
+                        Some(WellFormedLoc::Ty(def_id)),
+                        Unnormalized::new(ty),
+                    );
                     wfcx.register_wf_obligation(span, loc, ty.into());
                 }
                 Ok(())
@@ -1061,7 +1069,7 @@ fn check_type_defn<'tcx>(
                 let ty = wfcx.deeply_normalize(
                     hir_ty.span,
                     None,
-                    tcx.type_of(field.did).instantiate_identity().skip_normalization(),
+                    tcx.type_of(field.did).instantiate_identity(),
                 );
                 wfcx.register_wf_obligation(
                     hir_ty.span,
@@ -1108,7 +1116,7 @@ fn check_type_defn<'tcx>(
                 let ty = wfcx.normalize(
                     hir_ty.span,
                     None,
-                    tcx.type_of(field.did).instantiate_identity().skip_normalization(),
+                    tcx.type_of(field.did).instantiate_identity(),
                 );
                 wfcx.register_bound(
                     traits::ObligationCause::new(
@@ -1263,14 +1271,14 @@ pub(crate) fn check_static_item<'tcx>(
     enter_wf_checking_ctxt(tcx, item_id, |wfcx| {
         let span = tcx.ty_span(item_id);
         let loc = Some(WellFormedLoc::Ty(item_id));
-        let item_ty = wfcx.deeply_normalize(span, loc, ty);
+        let item_ty = wfcx.deeply_normalize(span, loc, Unnormalized::new(ty));
 
         let is_foreign_item = tcx.is_foreign_item(item_id);
         let is_structurally_foreign_item = || {
             let tail = tcx.struct_tail_raw(
                 item_ty,
                 &ObligationCause::dummy(),
-                |ty| wfcx.deeply_normalize(span, loc, ty),
+                |ty| wfcx.deeply_normalize(span, loc, Unnormalized::new(ty)),
                 || {},
             );
 
@@ -1334,7 +1342,8 @@ pub(super) fn check_type_const<'tcx>(
 
     if has_value {
         let raw_ct = tcx.const_of_item(def_id).instantiate_identity().skip_normalization();
-        let norm_ct = wfcx.deeply_normalize(span, Some(WellFormedLoc::Ty(def_id)), raw_ct);
+        let norm_ct =
+            wfcx.deeply_normalize(span, Some(WellFormedLoc::Ty(def_id)), Unnormalized::new(raw_ct));
         wfcx.register_wf_obligation(span, Some(WellFormedLoc::Ty(def_id)), norm_ct.into());
 
         wfcx.register_obligation(Obligation::new(
@@ -1368,7 +1377,7 @@ fn check_impl<'tcx>(
                 let trait_ref = wfcx.deeply_normalize(
                     trait_span,
                     Some(WellFormedLoc::Ty(item.hir_id().expect_owner().def_id)),
-                    trait_ref,
+                    Unnormalized::new(trait_ref),
                 );
                 let trait_pred =
                     ty::TraitPredicate { trait_ref, polarity: ty::PredicatePolarity::Positive };
@@ -1407,7 +1416,7 @@ fn check_impl<'tcx>(
                         let bound = wfcx.normalize(
                             item.span,
                             Some(WellFormedLoc::Ty(item.hir_id().expect_owner().def_id)),
-                            bound,
+                            Unnormalized::new(bound),
                         );
                         wfcx.register_obligation(Obligation::new(
                             tcx,
@@ -1431,7 +1440,7 @@ fn check_impl<'tcx>(
                 let self_ty = wfcx.deeply_normalize(
                     item.span,
                     Some(WellFormedLoc::Ty(item.hir_id().expect_owner().def_id)),
-                    self_ty,
+                    Unnormalized::new(self_ty),
                 );
                 wfcx.register_wf_obligation(
                     impl_.self_ty.span,
@@ -1600,7 +1609,7 @@ pub(super) fn check_where_clauses<'tcx>(wfcx: &WfCheckingCtxt<'_, 'tcx>, def_id:
             // Note the subtle difference from how we handle `predicates`
             // below: there, we are not trying to prove those predicates
             // to be *true* but merely *well-formed*.
-            let pred = wfcx.normalize(sp, None, pred);
+            let pred = wfcx.normalize(sp, None, Unnormalized::new(pred));
             let cause = traits::ObligationCause::new(
                 sp,
                 wfcx.body_def_id,
@@ -1677,7 +1686,7 @@ fn check_fn_or_method<'tcx>(
                     // one greater than the index of the last input type.
                     param_idx: idx,
                 }),
-                ty,
+                Unnormalized::new(ty),
             )
         }));
 
@@ -1765,14 +1774,14 @@ fn check_method_receiver<'tcx>(
 
     let sig = tcx.fn_sig(method.def_id).instantiate_identity().skip_normalization();
     let sig = tcx.liberate_late_bound_regions(method.def_id, sig);
-    let sig = wfcx.normalize(DUMMY_SP, loc, sig);
+    let sig = wfcx.normalize(DUMMY_SP, loc, Unnormalized::new(sig));
 
     debug!("check_method_receiver: sig={:?}", sig);
 
-    let self_ty = wfcx.normalize(DUMMY_SP, loc, self_ty);
+    let self_ty = wfcx.normalize(DUMMY_SP, loc, Unnormalized::new(self_ty));
 
     let receiver_ty = sig.inputs()[0];
-    let receiver_ty = wfcx.normalize(DUMMY_SP, loc, receiver_ty);
+    let receiver_ty = wfcx.normalize(DUMMY_SP, loc, Unnormalized::new(receiver_ty));
 
     // If the receiver already has errors reported, consider it valid to avoid
     // unnecessary errors (#58712).
@@ -2360,7 +2369,7 @@ impl<'tcx> WfCheckingCtxt<'_, 'tcx> {
 
             // Match the existing behavior.
             if pred.is_global() && !pred.has_type_flags(TypeFlags::HAS_BINDER_VARS) {
-                let pred = self.normalize(span, None, pred);
+                let pred = self.normalize(span, None, Unnormalized::new(pred));
 
                 // only use the span of the predicate clause (#90869)
                 let hir_node = tcx.hir_node_by_def_id(self.body_def_id);

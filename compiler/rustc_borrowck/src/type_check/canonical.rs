@@ -5,7 +5,7 @@ use rustc_infer::infer::canonical::Canonical;
 use rustc_infer::infer::outlives::env::RegionBoundPairs;
 use rustc_middle::bug;
 use rustc_middle::mir::{Body, ConstraintCategory};
-use rustc_middle::ty::{self, Ty, TyCtxt, TypeFoldable, Upcast};
+use rustc_middle::ty::{self, Ty, TyCtxt, TypeFoldable, Unnormalized, Upcast};
 use rustc_span::Span;
 use rustc_span::def_id::DefId;
 use rustc_trait_selection::solve::NoSolution;
@@ -246,11 +246,7 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
                 CustomTypeOp::new(
                     |ocx| {
                         let structurally_normalize = |ty| {
-                            ocx.structurally_normalize_ty(
-                                &cause,
-                                param_env,
-                                ty,
-                            )
+                            ocx.structurally_normalize_ty(&cause, param_env, Unnormalized::new(ty))
                             .unwrap_or_else(|_| bug!("struct tail should have been computable, since we computed it in HIR"))
                         };
 
@@ -295,7 +291,7 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
                                 body.source.def_id().expect_local(),
                             ),
                             param_env,
-                            ty,
+                            Unnormalized::new(ty),
                         )
                         .map_err(|_| NoSolution)
                     },
@@ -364,7 +360,7 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
                     // obligation for the unnormalized user_ty here. This is
                     // where the "incorrectly skips the WF checks we normally do"
                     // happens
-                    let user_ty = ocx.normalize(&cause, param_env, user_ty);
+                    let user_ty = ocx.normalize(&cause, param_env, Unnormalized::new(user_ty));
                     ocx.eq(&cause, param_env, user_ty, mir_ty)?;
                     Ok(())
                 },

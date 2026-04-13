@@ -539,7 +539,10 @@ pub fn generic_simd_intrinsic<'a, 'gcc, 'tcx>(
         match *in_elem.kind() {
             ty::RawPtr(p_ty, _) => {
                 let metadata = p_ty.ptr_metadata_ty(bx.tcx, |ty| {
-                    bx.tcx.normalize_erasing_regions(ty::TypingEnv::fully_monomorphized(), ty)
+                    bx.tcx.normalize_erasing_regions(
+                        ty::TypingEnv::fully_monomorphized(),
+                        Unnormalized::new(ty),
+                    )
                 });
                 require!(
                     metadata.is_unit(),
@@ -553,7 +556,10 @@ pub fn generic_simd_intrinsic<'a, 'gcc, 'tcx>(
         match *out_elem.kind() {
             ty::RawPtr(p_ty, _) => {
                 let metadata = p_ty.ptr_metadata_ty(bx.tcx, |ty| {
-                    bx.tcx.normalize_erasing_regions(ty::TypingEnv::fully_monomorphized(), ty)
+                    bx.tcx.normalize_erasing_regions(
+                        ty::TypingEnv::fully_monomorphized(),
+                        Unnormalized::new(ty),
+                    )
                 });
                 require!(
                     metadata.is_unit(),

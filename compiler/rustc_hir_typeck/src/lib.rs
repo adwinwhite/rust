@@ -50,7 +50,7 @@ use rustc_hir_analysis::hir_ty_lowering::HirTyLowerer;
 use rustc_infer::traits::{ObligationCauseCode, ObligationInspector, WellFormedLoc};
 use rustc_middle::middle::codegen_fn_attrs::CodegenFnAttrFlags;
 use rustc_middle::query::Providers;
-use rustc_middle::ty::{self, Ty, TyCtxt};
+use rustc_middle::ty::{self, Ty, TyCtxt, Unnormalized};
 use rustc_middle::{bug, span_bug};
 use rustc_session::config;
 use rustc_span::Span;
@@ -168,7 +168,7 @@ fn typeck_with_inspect<'tcx>(
                 .inputs_and_output
                 .iter()
                 .enumerate()
-                .map(|(idx, ty)| fcx.normalize(arg_span(idx), ty)),
+                .map(|(idx, ty)| fcx.normalize(arg_span(idx), Unnormalized::new(ty))),
         );
 
         if tcx.codegen_fn_attrs(def_id).flags.contains(CodegenFnAttrFlags::NAKED) {
@@ -193,7 +193,7 @@ fn typeck_with_inspect<'tcx>(
 
         loops::check(tcx, def_id, body);
 
-        let expected_type = fcx.normalize(body.value.span, expected_type);
+        let expected_type = fcx.normalize(body.value.span, Unnormalized::new(expected_type));
 
         let wf_code = ObligationCauseCode::WellFormed(Some(WellFormedLoc::Ty(def_id)));
         fcx.register_wf_obligation(expected_type.into(), body.value.span, wf_code);
@@ -244,7 +244,7 @@ fn typeck_with_inspect<'tcx>(
     assert!(fcx.deferred_call_resolutions.borrow().is_empty());
 
     for (ty, span, code) in fcx.deferred_sized_obligations.borrow_mut().drain(..) {
-        let ty = fcx.normalize(span, ty);
+        let ty = fcx.normalize(span, Unnormalized::new(ty));
         fcx.require_type_is_sized(ty, span, code);
     }
 

@@ -1,7 +1,7 @@
 use rustc_infer::infer::at::At;
 use rustc_infer::traits::TraitEngine;
 use rustc_macros::extension;
-use rustc_middle::ty::{self, Ty};
+use rustc_middle::ty::{self, Ty, Unnormalized};
 
 use crate::traits::{NormalizeExt, Obligation};
 
@@ -62,7 +62,9 @@ impl<'tcx> At<'_, 'tcx> {
 
             Ok(self.infcx.resolve_vars_if_possible(new_infer))
         } else {
-            Ok(self.normalize(term).into_value_registering_obligations(self.infcx, fulfill_cx))
+            Ok(self
+                .normalize(Unnormalized::new(term))
+                .into_value_registering_obligations(self.infcx, fulfill_cx))
         }
     }
 }

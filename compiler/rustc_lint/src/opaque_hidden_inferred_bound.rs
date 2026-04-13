@@ -156,8 +156,11 @@ impl<'tcx> LateLintPass<'tcx> for OpaqueHiddenInferredBound {
                     let assoc_pred = assoc_pred.fold_with(proj_replacer);
 
                     let ocx = ObligationCtxt::new(infcx);
-                    let assoc_pred =
-                        ocx.normalize(&traits::ObligationCause::dummy(), cx.param_env, assoc_pred);
+                    let assoc_pred = ocx.normalize(
+                        &traits::ObligationCause::dummy(),
+                        cx.param_env,
+                        Unnormalized::new(assoc_pred),
+                    );
                     if !ocx.evaluate_obligations_error_on_ambiguity().is_empty() {
                         // Can't normalize for some reason...?
                         continue;

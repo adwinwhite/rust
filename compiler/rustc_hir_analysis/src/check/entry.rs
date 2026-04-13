@@ -5,7 +5,7 @@ use rustc_hir as hir;
 use rustc_hir::{Node, find_attr};
 use rustc_infer::infer::TyCtxtInferExt;
 use rustc_middle::span_bug;
-use rustc_middle::ty::{self, TyCtxt, TypingMode};
+use rustc_middle::ty::{self, TyCtxt, TypingMode, Unnormalized};
 use rustc_session::config::EntryFnType;
 use rustc_span::def_id::{CRATE_DEF_ID, DefId, LocalDefId};
 use rustc_span::{ErrorGuaranteed, Span};
@@ -130,7 +130,7 @@ fn check_main_fn_ty(tcx: TyCtxt<'_>, main_def_id: DefId) -> Result<(), ErrorGuar
             ObligationCauseCode::MainFunctionType,
         );
         let ocx = traits::ObligationCtxt::new_with_diagnostics(&infcx);
-        let norm_return_ty = ocx.normalize(&cause, param_env, return_ty);
+        let norm_return_ty = ocx.normalize(&cause, param_env, Unnormalized::new(return_ty));
         ocx.register_bound(cause, param_env, norm_return_ty, term_did);
         let errors = ocx.evaluate_obligations_error_on_ambiguity();
         if !errors.is_empty() {

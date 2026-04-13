@@ -12,7 +12,7 @@ use rustc_middle::mir::{Body, ConstraintCategory};
 use rustc_middle::ty::{
     self, DefiningScopeKind, DefinitionSiteHiddenType, FallibleTypeFolder, GenericArg,
     GenericArgsRef, OpaqueTypeKey, ProvisionalHiddenType, Region, RegionVid, Ty, TyCtxt,
-    TypeFoldable, TypeSuperFoldable, TypeVisitableExt, fold_regions,
+    TypeFoldable, TypeSuperFoldable, TypeVisitableExt, Unnormalized, fold_regions,
 };
 use rustc_mir_dataflow::points::DenseLocationMap;
 use rustc_span::Span;
@@ -599,8 +599,10 @@ pub(crate) fn apply_definition_site_hidden_types<'tcx>(
                         body.source.def_id().expect_local(),
                     );
                     // We need to normalize both types in the old solver before equatingt them.
-                    let actual_ty = ocx.normalize(&cause, infcx.param_env, hidden_type.ty);
-                    let expected_ty = ocx.normalize(&cause, infcx.param_env, expected_ty);
+                    let actual_ty =
+                        ocx.normalize(&cause, infcx.param_env, Unnormalized::new(hidden_type.ty));
+                    let expected_ty =
+                        ocx.normalize(&cause, infcx.param_env, Unnormalized::new(expected_ty));
                     ocx.eq(&cause, infcx.param_env, actual_ty, expected_ty).map_err(|_| NoSolution)
                 },
                 "equating opaque types",

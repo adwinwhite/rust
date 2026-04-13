@@ -163,9 +163,11 @@ pub(crate) fn check_refining_return_position_impl_trait_in_trait<'tcx>(
     // 2. Deeply normalize any other projections that show up in the bound. That makes sure
     //    that we don't consider `tests/ui/async-await/in-trait/async-associated-types.rs`
     //    or `tests/ui/impl-trait/in-trait/refine-normalize.rs` to be refining.
-    let Ok((trait_bounds, impl_bounds)) =
-        ocx.deeply_normalize(&ObligationCause::dummy(), param_env, (trait_bounds, impl_bounds))
-    else {
+    let Ok((trait_bounds, impl_bounds)) = ocx.deeply_normalize(
+        &ObligationCause::dummy(),
+        param_env,
+        Unnormalized::new((trait_bounds, impl_bounds)),
+    ) else {
         tcx.dcx().delayed_bug("encountered errors when checking RPITIT refinement (selection)");
         return;
     };
@@ -179,7 +181,7 @@ pub(crate) fn check_refining_return_position_impl_trait_in_trait<'tcx>(
     implied_wf_types.extend(ocx.normalize(
         &ObligationCause::dummy(),
         param_env,
-        trait_m_sig.inputs_and_output,
+        Unnormalized::new(trait_m_sig.inputs_and_output),
     ));
     if !ocx.evaluate_obligations_error_on_ambiguity().is_empty() {
         tcx.dcx().delayed_bug("encountered errors when checking RPITIT refinement (selection)");

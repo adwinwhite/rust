@@ -6,7 +6,7 @@ use rustc_data_structures::graph::iterate::{
 use rustc_hir::LangItem;
 use rustc_hir::def::DefKind;
 use rustc_middle::mir::{self, BasicBlock, BasicBlocks, Body, Terminator, TerminatorKind};
-use rustc_middle::ty::{self, GenericArg, GenericArgs, Instance, Ty, TyCtxt};
+use rustc_middle::ty::{self, GenericArg, GenericArgs, Instance, Ty, TyCtxt, Unnormalized};
 use rustc_session::lint::builtin::UNCONDITIONAL_RECURSION;
 use rustc_span::Span;
 
@@ -143,7 +143,9 @@ impl<'tcx> TerminatorClassifier<'tcx> for CallRecursion<'tcx> {
 
         let func_ty = func.ty(body, tcx);
         if let ty::FnDef(callee, args) = *func_ty.kind() {
-            let Ok(normalized_args) = tcx.try_normalize_erasing_regions(typing_env, args) else {
+            let Ok(normalized_args) =
+                tcx.try_normalize_erasing_regions(typing_env, Unnormalized::new(args))
+            else {
                 return false;
             };
             let (callee, call_args) = if let Ok(Some(instance)) =

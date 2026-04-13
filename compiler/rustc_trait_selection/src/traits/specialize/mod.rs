@@ -20,7 +20,9 @@ use rustc_middle::bug;
 use rustc_middle::query::LocalCrate;
 use rustc_middle::traits::query::NoSolution;
 use rustc_middle::ty::print::PrintTraitRefExt as _;
-use rustc_middle::ty::{self, GenericArgsRef, Ty, TyCtxt, TypeVisitableExt, TypingMode};
+use rustc_middle::ty::{
+    self, GenericArgsRef, Ty, TyCtxt, TypeVisitableExt, TypingMode, Unnormalized,
+};
 use rustc_session::lint::builtin::COHERENCE_LEAK_CHECK;
 use rustc_span::{DUMMY_SP, ErrorGuaranteed, Span, sym};
 use specialization_graph::GraphExt;
@@ -165,7 +167,7 @@ fn fulfill_implication<'tcx>(
     );
 
     let ocx = ObligationCtxt::new(infcx);
-    let source_trait_ref = ocx.normalize(cause, param_env, source_trait_ref);
+    let source_trait_ref = ocx.normalize(cause, param_env, Unnormalized::new(source_trait_ref));
 
     if !ocx.evaluate_obligations_error_on_ambiguity().is_empty() {
         infcx.dcx().span_delayed_bug(
@@ -179,11 +181,7 @@ fn fulfill_implication<'tcx>(
     let target_trait_ref = ocx.normalize(
         cause,
         param_env,
-        infcx
-            .tcx
-            .impl_trait_ref(target_impl)
-            .instantiate(infcx.tcx, target_args)
-            .skip_normalization(),
+        infcx.tcx.impl_trait_ref(target_impl).instantiate(infcx.tcx, target_args),
     );
 
     // do the impls unify? If not, no specialization.
@@ -195,11 +193,7 @@ fn fulfill_implication<'tcx>(
     let predicates = ocx.normalize(
         cause,
         param_env,
-        infcx
-            .tcx
-            .predicates_of(target_impl)
-            .instantiate(infcx.tcx, target_args)
-            .skip_normalization(),
+        infcx.tcx.predicates_of(target_impl).instantiate(infcx.tcx, target_args),
     );
     let obligations = predicates_for_generics(|_, _| cause.clone(), param_env, predicates);
     ocx.register_obligations(obligations);
@@ -300,7 +294,8 @@ pub(super) fn specializes(
     // Attempt to prove that the parent impl applies, given all of the above.
 
     let ocx = ObligationCtxt::new(&infcx);
-    let specializing_impl_trait_ref = ocx.normalize(cause, param_env, specializing_impl_trait_ref);
+    let specializing_impl_trait_ref =
+        ocx.normalize(cause, param_env, Unnormalized::new(specializing_impl_trait_ref));
 
     if !ocx.evaluate_obligations_error_on_ambiguity().is_empty() {
         infcx.dcx().span_delayed_bug(
@@ -314,11 +309,7 @@ pub(super) fn specializes(
     let parent_impl_trait_ref = ocx.normalize(
         cause,
         param_env,
-        infcx
-            .tcx
-            .impl_trait_ref(parent_impl_def_id)
-            .instantiate(infcx.tcx, parent_args)
-            .skip_normalization(),
+        infcx.tcx.impl_trait_ref(parent_impl_def_id).instantiate(infcx.tcx, parent_args),
     );
 
     // do the impls unify? If not, no specialization.
@@ -333,11 +324,7 @@ pub(super) fn specializes(
     let predicates = ocx.normalize(
         cause,
         param_env,
-        infcx
-            .tcx
-            .predicates_of(parent_impl_def_id)
-            .instantiate(infcx.tcx, parent_args)
-            .skip_normalization(),
+        infcx.tcx.predicates_of(parent_impl_def_id).instantiate(infcx.tcx, parent_args),
     );
     let obligations = predicates_for_generics(|_, _| cause.clone(), param_env, predicates);
     ocx.register_obligations(obligations);
@@ -367,11 +354,7 @@ pub(super) fn specializes(
         let const_conditions = ocx.normalize(
             cause,
             param_env,
-            infcx
-                .tcx
-                .const_conditions(parent_impl_def_id)
-                .instantiate(infcx.tcx, parent_args)
-                .skip_normalization(),
+            infcx.tcx.const_conditions(parent_impl_def_id).instantiate(infcx.tcx, parent_args),
         );
         ocx.register_obligations(const_conditions.into_iter().map(|(trait_ref, _)| {
             Obligation::new(

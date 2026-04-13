@@ -656,7 +656,7 @@ pub fn check_function_signature<'tcx>(
     let actual_sig = tcx.fn_sig(fn_id).instantiate_identity().skip_normalization();
 
     let norm_cause = ObligationCause::misc(cause.span, local_id);
-    let actual_sig = ocx.normalize(&norm_cause, param_env, actual_sig);
+    let actual_sig = ocx.normalize(&norm_cause, param_env, Unnormalized::new(actual_sig));
 
     match ocx.eq(&cause, param_env, expected_sig, actual_sig) {
         Ok(()) => {

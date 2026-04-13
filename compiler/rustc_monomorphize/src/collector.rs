@@ -227,7 +227,7 @@ use rustc_middle::ty::adjustment::{CustomCoerceUnsized, PointerCoercion};
 use rustc_middle::ty::layout::ValidityRequirement;
 use rustc_middle::ty::{
     self, GenericArgs, GenericParamDefKind, Instance, InstanceKind, Ty, TyCtxt, TypeFoldable,
-    TypeVisitable, TypeVisitableExt, TypeVisitor, VtblEntry,
+    TypeVisitable, TypeVisitableExt, TypeVisitor, Unnormalized, VtblEntry,
 };
 use rustc_middle::util::Providers;
 use rustc_middle::{bug, span_bug};
@@ -1171,10 +1171,14 @@ fn find_tails_for_unsizing<'tcx>(
                 };
             let coerce_field = &source_adt_def.non_enum_variant().fields[coerce_index];
             // We're getting a possibly unnormalized type, so normalize it.
-            let source_field =
-                tcx.normalize_erasing_regions(typing_env, coerce_field.ty(*tcx, source_args));
-            let target_field =
-                tcx.normalize_erasing_regions(typing_env, coerce_field.ty(*tcx, target_args));
+            let source_field = tcx.normalize_erasing_regions(
+                typing_env,
+                Unnormalized::new(coerce_field.ty(*tcx, source_args)),
+            );
+            let target_field = tcx.normalize_erasing_regions(
+                typing_env,
+                Unnormalized::new(coerce_field.ty(*tcx, target_args)),
+            );
             find_tails_for_unsizing(tcx, source_field, target_field)
         }
 
@@ -1640,7 +1644,7 @@ impl<'v> RootCollector<'_, 'v> {
                     };
                     let Ok(instance) = self.tcx.try_normalize_erasing_regions(
                         ty::TypingEnv::fully_monomorphized(),
-                        instance,
+                        Unnormalized::new(instance),
                     ) else {
                         // Don't ICE on an impossible-to-normalize closure.
                         return;
@@ -1718,7 +1722,7 @@ impl<'v> RootCollector<'_, 'v> {
         // listing.
         let main_ret_ty = self.tcx.normalize_erasing_regions(
             ty::TypingEnv::fully_monomorphized(),
-            main_ret_ty.no_bound_vars().unwrap(),
+            Unnormalized::new(main_ret_ty.no_bound_vars().unwrap()),
         );
 
         let start_instance = Instance::expect_resolve(
@@ -1780,7 +1784,7 @@ fn create_mono_items_for_default_impls<'tcx>(
     }
 
     let typing_env = ty::TypingEnv::fully_monomorphized();
-    let trait_ref = tcx.normalize_erasing_regions(typing_env, trait_ref);
+    let trait_ref = tcx.normalize_erasing_regions(typing_env, Unnormalized::new(trait_ref));
     let overridden_methods = tcx.impl_item_implementor_ids(item.owner_id);
     for method in tcx.provided_trait_methods(trait_ref.def_id) {
         if overridden_methods.contains_key(&method.def_id) {

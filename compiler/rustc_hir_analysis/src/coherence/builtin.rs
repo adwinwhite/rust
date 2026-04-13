@@ -14,7 +14,7 @@ use rustc_infer::traits::Obligation;
 use rustc_middle::ty::adjustment::CoerceUnsizedInfo;
 use rustc_middle::ty::print::PrintTraitRefExt as _;
 use rustc_middle::ty::{
-    self, Ty, TyCtxt, TypeVisitableExt, TypingMode, suggest_constraining_type_params,
+    self, Ty, TyCtxt, TypeVisitableExt, TypingMode, Unnormalized, suggest_constraining_type_params,
 };
 use rustc_span::{DUMMY_SP, Span, sym};
 use rustc_trait_selection::error_reporting::InferCtxtErrorExt;
@@ -350,7 +350,7 @@ fn visit_implementation_of_dispatch_from_dyn(checker: &Checker<'_>) -> Result<()
                     if tcx
                         .try_normalize_erasing_regions(
                             ty::TypingEnv::non_body_analysis(tcx, def_a.did()),
-                            unnormalized_ty,
+                            Unnormalized::new(unnormalized_ty),
                         )
                         .unwrap_or(unnormalized_ty)
                         .is_phantom_data()
@@ -571,7 +571,7 @@ pub(crate) fn coerce_unsized_info<'tcx>(
                     if tcx
                         .try_normalize_erasing_regions(
                             ty::TypingEnv::non_body_analysis(tcx, def_a.did()),
-                            unnormalized_ty,
+                            Unnormalized::new(unnormalized_ty),
                         )
                         .unwrap_or(unnormalized_ty)
                         .is_phantom_data()

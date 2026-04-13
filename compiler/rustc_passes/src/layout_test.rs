@@ -5,7 +5,7 @@ use rustc_hir::def_id::LocalDefId;
 use rustc_hir::find_attr;
 use rustc_middle::span_bug;
 use rustc_middle::ty::layout::{HasTyCtxt, HasTypingEnv, LayoutError, LayoutOfHelpers};
-use rustc_middle::ty::{self, Ty, TyCtxt};
+use rustc_middle::ty::{self, Ty, TyCtxt, Unnormalized};
 use rustc_span::Span;
 use rustc_trait_selection::error_reporting::InferCtxtErrorExt;
 use rustc_trait_selection::infer::TyCtxtInferExt;
@@ -75,7 +75,8 @@ fn dump_layout_of(tcx: TyCtxt<'_>, item_def_id: LocalDefId, kinds: &[RustcDumpLa
                         format!("backend_repr: {:?}", ty_layout.backend_repr)
                     }
                     RustcDumpLayoutKind::Debug => {
-                        let normalized_ty = tcx.normalize_erasing_regions(typing_env, ty);
+                        let normalized_ty =
+                            tcx.normalize_erasing_regions(typing_env, Unnormalized::new(ty));
                         // FIXME: using the `Debug` impl here isn't ideal.
                         format!("layout_of({normalized_ty}) = {:#?}", *ty_layout)
                     }

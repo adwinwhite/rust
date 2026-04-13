@@ -432,7 +432,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     ) -> ty::InstantiatedPredicates<'tcx> {
         let bounds = self.tcx.predicates_of(def_id);
         let result = bounds.instantiate(self.tcx, args).skip_normalization();
-        let result = self.normalize(span, result);
+        let result = self.normalize(span, Unnormalized::new(result));
         debug!("instantiate_bounds(bounds={:?}, args={:?}) = {:?}", bounds, args, result);
         result
     }
@@ -443,7 +443,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     {
         let value = value.inside_norm();
         self.register_infer_ok_obligations(
-            self.at(&self.misc(span), self.param_env).normalize(value),
+            self.at(&self.misc(span), self.param_env).normalize(Unnormalized::new(value)),
         )
     }
 
@@ -489,7 +489,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     if self.next_trait_solver() {
                         self.try_structurally_resolve_type(span, ty)
                     } else {
-                        self.normalize(span, ty)
+                        self.normalize(span, Unnormalized::new(ty))
                     }
                 },
                 || {},
@@ -662,7 +662,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         field: &'tcx ty::FieldDef,
         args: GenericArgsRef<'tcx>,
     ) -> Ty<'tcx> {
-        self.normalize(span, field.ty(self.tcx, args))
+        self.normalize(span, Unnormalized::new(field.ty(self.tcx, args)))
     }
 
     /// Drain all obligations that are stalled on coroutines defined in this body.
@@ -1072,7 +1072,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
         if let Res::Local(hid) = res {
             let ty = self.local_ty(span, hid);
-            let ty = self.normalize(span, ty);
+            let ty = self.normalize(span, Unnormalized::new(ty));
             return (ty, res);
         }
 
@@ -1356,7 +1356,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         self.write_user_type_annotation_from_args(hir_id, def_id, args_for_user_type, user_self_ty);
 
         // Normalize only after registering type annotations.
-        let args = self.normalize(span, args_raw);
+        let args = self.normalize(span, Unnormalized::new(args_raw));
 
         self.add_required_obligations_for_hir(span, def_id, args, hir_id);
 
@@ -1365,7 +1365,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let ty = tcx.type_of(def_id);
         assert!(!args.has_escaping_bound_vars());
         assert!(!ty.skip_binder().has_escaping_bound_vars());
-        let ty_instantiated = self.normalize(span, ty.instantiate(tcx, args).skip_normalization());
+        let ty_instantiated = self.normalize(span, ty.instantiate(tcx, args));
 
         if let Some(UserSelfTy { impl_def_id, self_ty }) = user_self_ty {
             // In the case of `Foo<T>::method` and `<Foo<T>>::method`, if `method`
@@ -1373,11 +1373,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             // type parameters, which we can infer by unifying the provided `Self`
             // with the instantiated impl type.
             // This also occurs for an enum variant on a type alias.
-            let impl_ty = self.normalize(
-                span,
-                tcx.type_of(impl_def_id).instantiate(tcx, args).skip_normalization(),
-            );
-            let self_ty = self.normalize(span, self_ty);
+            let impl_ty = self.normalize(span, tcx.type_of(impl_def_id).instantiate(tcx, args));
+            let self_ty = self.normalize(span, Unnormalized::new(self_ty));
             match self.at(&self.misc(span), self.param_env).eq(
                 DefineOpaqueTypes::Yes,
                 impl_ty,
@@ -1455,9 +1452,10 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             // We need to use a separate variable here as otherwise the temporary for
             // `self.fulfillment_cx.borrow_mut()` is alive in the `Err` branch, resulting
             // in a reentrant borrow, causing an ICE.
-            let result = self
-                .at(&self.misc(sp), self.param_env)
-                .structurally_normalize_ty(ty, &mut **self.fulfillment_cx.borrow_mut());
+            let result = self.at(&self.misc(sp), self.param_env).structurally_normalize_ty(
+                Unnormalized::new(ty),
+                &mut **self.fulfillment_cx.borrow_mut(),
+            );
             match result {
                 Ok(normalized_ty) => normalized_ty,
                 Err(errors) => {
@@ -1484,9 +1482,10 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             // We need to use a separate variable here as otherwise the temporary for
             // `self.fulfillment_cx.borrow_mut()` is alive in the `Err` branch, resulting
             // in a reentrant borrow, causing an ICE.
-            let result = self
-                .at(&self.misc(sp), self.param_env)
-                .structurally_normalize_const(ct, &mut **self.fulfillment_cx.borrow_mut());
+            let result = self.at(&self.misc(sp), self.param_env).structurally_normalize_const(
+                Unnormalized::new(ct),
+                &mut **self.fulfillment_cx.borrow_mut(),
+            );
             match result {
                 Ok(normalized_ct) => normalized_ct,
                 Err(errors) => {

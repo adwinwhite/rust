@@ -33,7 +33,9 @@ use rustc_middle::bug;
 use rustc_middle::lint::LevelAndSource;
 use rustc_middle::ty::layout::LayoutOf;
 use rustc_middle::ty::print::with_no_trimmed_paths;
-use rustc_middle::ty::{self, AssocContainer, Ty, TyCtxt, TypeVisitableExt, Upcast, VariantDef};
+use rustc_middle::ty::{
+    self, AssocContainer, Ty, TyCtxt, TypeVisitableExt, Unnormalized, Upcast, VariantDef,
+};
 // hardwired lints from rustc_lint_defs
 pub use rustc_session::lint::builtin::*;
 use rustc_session::lint::fcw;
@@ -2529,7 +2531,10 @@ impl<'tcx> LateLintPass<'tcx> for InvalidValue {
             ty: Ty<'tcx>,
             init: InitKind,
         ) -> Option<InitError> {
-            let ty = cx.tcx.try_normalize_erasing_regions(cx.typing_env(), ty).unwrap_or(ty);
+            let ty = cx
+                .tcx
+                .try_normalize_erasing_regions(cx.typing_env(), Unnormalized::new(ty))
+                .unwrap_or(ty);
 
             match ty.kind() {
                 // Primitive types that don't like 0 as a value.

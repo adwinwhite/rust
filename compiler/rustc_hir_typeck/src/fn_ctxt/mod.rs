@@ -17,7 +17,7 @@ use rustc_hir_analysis::hir_ty_lowering::{
 };
 use rustc_infer::infer::{self, RegionVariableOrigin};
 use rustc_infer::traits::{DynCompatibilityViolation, Obligation};
-use rustc_middle::ty::{self, Const, Ty, TyCtxt, TypeVisitableExt};
+use rustc_middle::ty::{self, Const, Ty, TyCtxt, TypeVisitableExt, Unnormalized};
 use rustc_session::Session;
 use rustc_span::{self, DUMMY_SP, ErrorGuaranteed, Ident, Span};
 use rustc_trait_selection::error_reporting::TypeErrCtxt;
@@ -197,8 +197,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 }
                 self.probe(|_| {
                     let ocx = ObligationCtxt::new(self);
-                    let normalized_fn_sig =
-                        ocx.normalize(&ObligationCause::dummy(), self.param_env, fn_sig);
+                    let normalized_fn_sig = ocx.normalize(
+                        &ObligationCause::dummy(),
+                        self.param_env,
+                        Unnormalized::new(fn_sig),
+                    );
                     if ocx.evaluate_obligations_error_on_ambiguity().is_empty() {
                         let normalized_fn_sig = self.resolve_vars_if_possible(normalized_fn_sig);
                         if !normalized_fn_sig.has_infer() {
@@ -279,7 +282,7 @@ impl<'tcx> HirTyLowerer<'tcx> for FnCtxt<'_, 'tcx> {
 
             self.trait_ascriptions.borrow_mut().entry(hir_id.local_id).or_default().push(clause);
 
-            let clause = self.normalize(span, clause);
+            let clause = self.normalize(span, Unnormalized::new(clause));
             self.register_predicate(Obligation::new(
                 self.tcx,
                 self.misc(span),
@@ -326,11 +329,19 @@ impl<'tcx> HirTyLowerer<'tcx> for FnCtxt<'_, 'tcx> {
 
         let mut filter_iat_candidate = |self_ty, impl_| {
             let ocx = ObligationCtxt::new_with_diagnostics(self);
-            let self_ty = ocx.normalize(&ObligationCause::dummy(), self.param_env, self_ty);
+            let self_ty = ocx.normalize(
+                &ObligationCause::dummy(),
+                self.param_env,
+                Unnormalized::new(self_ty),
+            );
 
             let impl_args = infcx.fresh_args_for_item(span, impl_);
             let impl_ty = tcx.type_of(impl_).instantiate(tcx, impl_args).skip_normalization();
-            let impl_ty = ocx.normalize(&ObligationCause::dummy(), self.param_env, impl_ty);
+            let impl_ty = ocx.normalize(
+                &ObligationCause::dummy(),
+                self.param_env,
+                Unnormalized::new(impl_ty),
+            );
 
             // Check that the self types can be related.
             if ocx.eq(&ObligationCause::dummy(), self.param_env, impl_ty, self_ty).is_err() {
@@ -340,7 +351,11 @@ impl<'tcx> HirTyLowerer<'tcx> for FnCtxt<'_, 'tcx> {
             // Check whether the impl imposes obligations we have to worry about.
             let impl_bounds =
                 tcx.predicates_of(impl_).instantiate(tcx, impl_args).skip_normalization();
-            let impl_bounds = ocx.normalize(&ObligationCause::dummy(), self.param_env, impl_bounds);
+            let impl_bounds = ocx.normalize(
+                &ObligationCause::dummy(),
+                self.param_env,
+                Unnormalized::new(impl_bounds),
+            );
             let impl_obligations = traits::predicates_for_generics(
                 |_, _| ObligationCause::dummy(),
                 self.param_env,
@@ -411,7 +426,7 @@ impl<'tcx> HirTyLowerer<'tcx> for FnCtxt<'_, 'tcx> {
                 if self.next_trait_solver() {
                     self.try_structurally_resolve_type(span, ty).ty_adt_def()
                 } else {
-                    self.normalize(span, ty).ty_adt_def()
+                    self.normalize(span, Unnormalized::new(ty)).ty_adt_def()
                 }
             }
             _ => None,
@@ -434,7 +449,7 @@ impl<'tcx> HirTyLowerer<'tcx> for FnCtxt<'_, 'tcx> {
                 self.add_required_obligations_for_hir(span, *def_id, args, hir_id);
             }
 
-            self.normalize(span, ty)
+            self.normalize(span, Unnormalized::new(ty))
         } else {
             ty
         };
@@ -489,7 +504,7 @@ impl<'tcx> LoweredTy<'tcx> {
         let normalized = if fcx.next_trait_solver() {
             fcx.try_structurally_resolve_type(span, raw)
         } else {
-            fcx.normalize(span, raw)
+            fcx.normalize(span, Unnormalized::new(raw))
         };
         LoweredTy { raw, normalized }
     }

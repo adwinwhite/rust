@@ -18,7 +18,9 @@ use rustc_hir::find_attr;
 use rustc_middle::mir::BinOp;
 use rustc_middle::ty::layout::{FnAbiOf, HasTyCtxt, HasTypingEnv, LayoutOf};
 use rustc_middle::ty::offload_meta::OffloadMetadata;
-use rustc_middle::ty::{self, GenericArgsRef, Instance, SimdAlign, Ty, TyCtxt, TypingEnv};
+use rustc_middle::ty::{
+    self, GenericArgsRef, Instance, SimdAlign, Ty, TyCtxt, TypingEnv, Unnormalized,
+};
 use rustc_middle::{bug, span_bug};
 use rustc_session::config::CrateType;
 use rustc_span::{Span, Symbol, sym};
@@ -2695,7 +2697,7 @@ fn generic_simd_intrinsic<'ll, 'tcx>(
         match in_elem.kind() {
             ty::RawPtr(p_ty, _) => {
                 let metadata = p_ty.ptr_metadata_ty(bx.tcx, |ty| {
-                    bx.tcx.normalize_erasing_regions(bx.typing_env(), ty)
+                    bx.tcx.normalize_erasing_regions(bx.typing_env(), Unnormalized::new(ty))
                 });
                 require!(
                     metadata.is_unit(),
@@ -2709,7 +2711,7 @@ fn generic_simd_intrinsic<'ll, 'tcx>(
         match out_elem.kind() {
             ty::RawPtr(p_ty, _) => {
                 let metadata = p_ty.ptr_metadata_ty(bx.tcx, |ty| {
-                    bx.tcx.normalize_erasing_regions(bx.typing_env(), ty)
+                    bx.tcx.normalize_erasing_regions(bx.typing_env(), Unnormalized::new(ty))
                 });
                 require!(
                     metadata.is_unit(),

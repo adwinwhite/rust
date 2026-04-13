@@ -1,7 +1,7 @@
 use rustc_data_structures::fx::FxHashSet;
 use rustc_infer::traits::query::type_op::DropckOutlives;
 use rustc_middle::traits::query::{DropckConstraint, DropckOutlivesResult};
-use rustc_middle::ty::{self, EarlyBinder, ParamEnvAnd, Ty, TyCtxt};
+use rustc_middle::ty::{self, EarlyBinder, ParamEnvAnd, Ty, TyCtxt, Unnormalized};
 use rustc_span::Span;
 use tracing::{debug, instrument};
 
@@ -208,7 +208,7 @@ where
                 // reason that we could use to report an error in borrowck. In order to turn
                 // this into a reportable error, we deeply normalize again. We don't expect
                 // this to succeed, so delay a bug if it does.
-                match ocx.deeply_normalize(&cause, param_env, ty) {
+                match ocx.deeply_normalize(&cause, param_env, Unnormalized::new(ty)) {
                     Ok(_) => {
                         tcx.dcx().span_delayed_bug(
                             span,

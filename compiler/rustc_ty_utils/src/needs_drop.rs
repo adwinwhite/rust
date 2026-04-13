@@ -7,7 +7,7 @@ use rustc_hir::limit::Limit;
 use rustc_middle::bug;
 use rustc_middle::query::Providers;
 use rustc_middle::ty::util::{AlwaysRequiresDrop, needs_drop_components};
-use rustc_middle::ty::{self, EarlyBinder, GenericArgsRef, Ty, TyCtxt};
+use rustc_middle::ty::{self, EarlyBinder, GenericArgsRef, Ty, TyCtxt, Unnormalized};
 use tracing::{debug, instrument};
 
 use crate::errors::NeedsDropOverflow;
@@ -256,7 +256,10 @@ where
                         };
                         for required_ty in tys {
                             let required = tcx
-                                .try_normalize_erasing_regions(self.typing_env, required_ty)
+                                .try_normalize_erasing_regions(
+                                    self.typing_env,
+                                    Unnormalized::new(required_ty),
+                                )
                                 .unwrap_or(required_ty);
 
                             queue_type(self, required);

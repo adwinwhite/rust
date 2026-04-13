@@ -15,7 +15,7 @@ use rustc_hir::{self as hir, FnSig, HirId, ItemKind, find_attr};
 use rustc_infer::infer::{self, InferCtxt, TyCtxtInferExt};
 use rustc_infer::traits::{ObligationCause, ObligationCauseCode};
 use rustc_middle::ty::error::{ExpectedFound, TypeError};
-use rustc_middle::ty::{self, TyCtxt, TypeVisitableExt, TypingMode};
+use rustc_middle::ty::{self, TyCtxt, TypeVisitableExt, TypingMode, Unnormalized};
 use rustc_span::{ErrorGuaranteed, Ident, Span, Symbol};
 use rustc_trait_selection::error_reporting::InferCtxtErrorExt;
 use rustc_trait_selection::regions::InferCtxtRegionExt;
@@ -86,14 +86,15 @@ pub(crate) fn compare_eii_function_types<'tcx>(
             )
             .skip_normalization(),
     );
-    let external_impl_sig = ocx.normalize(&norm_cause, param_env, unnormalized_external_impl_sig);
+    let external_impl_sig =
+        ocx.normalize(&norm_cause, param_env, Unnormalized::new(unnormalized_external_impl_sig));
     debug!(?external_impl_sig);
 
     // Next, add all inputs and output as well-formed tys. Importantly,
     // we have to do this before normalization, since the normalized ty may
     // not contain the input parameters. See issue #87748.
     wf_tys.extend(declaration_sig.inputs_and_output.iter());
-    let declaration_sig = ocx.normalize(&norm_cause, param_env, declaration_sig);
+    let declaration_sig = ocx.normalize(&norm_cause, param_env, Unnormalized::new(declaration_sig));
     // We also have to add the normalized declaration
     // as we don't normalize during implied bounds computation.
     wf_tys.extend(external_impl_sig.inputs_and_output.iter());

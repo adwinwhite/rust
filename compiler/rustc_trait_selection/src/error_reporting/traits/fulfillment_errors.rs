@@ -31,7 +31,7 @@ use rustc_middle::ty::print::{
 };
 use rustc_middle::ty::{
     self, GenericArgKind, TraitRef, Ty, TyCtxt, TypeFoldable, TypeFolder, TypeSuperFoldable,
-    TypeVisitableExt, Upcast,
+    TypeVisitableExt, Unnormalized, Upcast,
 };
 use rustc_middle::{bug, span_bug};
 use rustc_span::def_id::CrateNum;
@@ -1577,7 +1577,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                     // FIXME(-Znext-solver): For diagnostic purposes, it would be nice
                     // to deeply normalize this type.
                     let normalized_term =
-                        ocx.normalize(&obligation.cause, obligation.param_env, unnormalized_term);
+                        ocx.normalize(&obligation.cause, obligation.param_env, Unnormalized::new(unnormalized_term));
 
                     // constrain inference variables a bit more to nested obligations from normalize so
                     // we can have more helpful errors.
@@ -1609,7 +1609,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                             let Ok(normalized_term) = ocx.structurally_normalize_term(
                                 &ObligationCause::dummy(),
                                 obligation.param_env,
-                                alias_term.to_term(self.tcx),
+                                Unnormalized::new(alias_term.to_term(self.tcx)),
                             ) else {
                                 return None;
                             };
@@ -2082,9 +2082,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                     let impl_trait_ref = ocx.normalize(
                         &ObligationCause::dummy(),
                         param_env,
-                        ty::EarlyBinder::bind(single.trait_ref)
-                            .instantiate(self.tcx, impl_args)
-                            .skip_normalization(),
+                        ty::EarlyBinder::bind(single.trait_ref).instantiate(self.tcx, impl_args),
                     );
 
                     ocx.register_obligations(
@@ -2435,7 +2433,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                     .tcx
                     .try_normalize_erasing_regions(
                         ty::TypingEnv::non_body_analysis(self.tcx, cand.impl_def_id),
-                        cand.trait_ref,
+                        Unnormalized::new(cand.trait_ref),
                     )
                     .unwrap_or(cand.trait_ref);
                 cand
@@ -2756,8 +2754,10 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
             let cleaned_pred =
                 pred.fold_with(&mut ParamToVarFolder { infcx: self, var_map: Default::default() });
 
-            let InferOk { value: cleaned_pred, .. } =
-                self.infcx.at(&ObligationCause::dummy(), param_env).normalize(cleaned_pred);
+            let InferOk { value: cleaned_pred, .. } = self
+                .infcx
+                .at(&ObligationCause::dummy(), param_env)
+                .normalize(Unnormalized::new(cleaned_pred));
 
             let obligation =
                 Obligation::new(self.tcx, ObligationCause::dummy(), param_env, cleaned_pred);
@@ -2860,7 +2860,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
         let Ok(assume) = ocx.structurally_normalize_const(
             &obligation.cause,
             obligation.param_env,
-            trait_ref.args.const_at(2),
+            Unnormalized::new(trait_ref.args.const_at(2)),
         ) else {
             return (obligation.clone(), trait_predicate);
         };
@@ -2913,7 +2913,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
             let Ok(assume) = ocx.structurally_normalize_const(
                 &obligation.cause,
                 obligation.param_env,
-                trait_pred.trait_ref.args.const_at(2),
+                Unnormalized::new(trait_pred.trait_ref.args.const_at(2)),
             ) else {
                 self.dcx().span_delayed_bug(
                     span,

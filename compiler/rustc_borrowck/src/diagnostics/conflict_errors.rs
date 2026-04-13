@@ -25,7 +25,7 @@ use rustc_middle::mir::{
 };
 use rustc_middle::ty::print::PrintTraitRefExt as _;
 use rustc_middle::ty::{
-    self, PredicateKind, Ty, TyCtxt, TypeSuperVisitable, TypeVisitor, Upcast,
+    self, PredicateKind, Ty, TyCtxt, TypeSuperVisitable, TypeVisitor, Unnormalized, Upcast,
     suggest_constraining_type_params,
 };
 use rustc_mir_dataflow::move_paths::{InitKind, MoveOutIndex, MovePathIndex};
@@ -740,10 +740,10 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                     ty::EarlyBinder::bind(ty).instantiate(tcx, new_args).skip_normalization();
                 if let Ok(old_ty) = tcx.try_normalize_erasing_regions(
                     self.infcx.typing_env(self.infcx.param_env),
-                    old_ty,
+                    Unnormalized::new(old_ty),
                 ) && let Ok(new_ty) = tcx.try_normalize_erasing_regions(
                     self.infcx.typing_env(self.infcx.param_env),
-                    new_ty,
+                    Unnormalized::new(new_ty),
                 ) {
                     old_ty == new_ty
                 } else {
@@ -766,7 +766,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                     // Normalize before testing to see through type aliases and projections.
                     if let Ok(normalized) = tcx.try_normalize_erasing_regions(
                         self.infcx.typing_env(self.infcx.param_env),
-                        clause,
+                        Unnormalized::new(clause),
                     ) {
                         clause = normalized;
                     }

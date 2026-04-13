@@ -116,7 +116,7 @@ where
         value: Unnormalized<T>,
     ) -> T {
         let value = value.inside_norm();
-        let infer_ok = self.infcx.at(cause, param_env).normalize(value);
+        let infer_ok = self.infcx.at(cause, param_env).normalize(Unnormalized::new(value));
         self.register_infer_ok_obligations(infer_ok)
     }
 
@@ -332,7 +332,7 @@ where
             match self
                 .infcx
                 .at(&cause, param_env)
-                .deeply_normalize(ty, &mut **self.engine.borrow_mut())
+                .deeply_normalize(Unnormalized::new(ty), &mut **self.engine.borrow_mut())
             {
                 // Insert well-formed types, ignoring duplicates.
                 Ok(normalized) => drop(implied_bounds.insert(normalized)),
