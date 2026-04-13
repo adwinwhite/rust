@@ -27,8 +27,8 @@ use rustc_middle::ty::adjustment::{
 };
 use rustc_middle::ty::{
     self, AdtKind, CanonicalUserType, GenericArgsRef, GenericParamDefKind, IsIdentity,
-    SizedTraitKind, Ty, TyCtxt, TypeFoldable, TypeVisitable, TypeVisitableExt, UserArgs,
-    UserSelfTy,
+    SizedTraitKind, Ty, TyCtxt, TypeFoldable, TypeVisitable, TypeVisitableExt, Unnormalized,
+    UserArgs, UserSelfTy,
 };
 use rustc_middle::{bug, span_bug};
 use rustc_session::lint;
@@ -437,10 +437,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         result
     }
 
-    pub(crate) fn normalize<T>(&self, span: Span, value: T) -> T
+    pub(crate) fn normalize<T>(&self, span: Span, value: Unnormalized<T>) -> T
     where
         T: TypeFoldable<TyCtxt<'tcx>>,
     {
+        let value = value.inside_norm();
         self.register_infer_ok_obligations(
             self.at(&self.misc(span), self.param_env).normalize(value),
         )

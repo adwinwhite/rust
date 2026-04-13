@@ -15,4 +15,22 @@ impl<T> Unnormalized<T> {
     pub fn skip_normalization(self) -> T {
         self.value
     }
+
+    pub fn inside_norm(self) -> T {
+        self.value
+    }
+
+    pub fn apply<F, U>(&self, f: F) -> U
+    where
+        F: FnOnce(&T) -> U,
+    {
+        f(&self.value)
+    }
+
+    pub fn map_inner<F, U>(self, f: F) -> Unnormalized<U>
+    where
+        F: FnOnce(T) -> U,
+    {
+        Unnormalized { value: f(self.value) }
+    }
 }

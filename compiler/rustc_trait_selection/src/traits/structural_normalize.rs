@@ -9,32 +9,35 @@ use crate::traits::{NormalizeExt, Obligation};
 impl<'tcx> At<'_, 'tcx> {
     fn structurally_normalize_ty<E: 'tcx>(
         &self,
-        ty: Ty<'tcx>,
+        ty: Unnormalized<Ty<'tcx>>,
         fulfill_cx: &mut dyn TraitEngine<'tcx, E>,
     ) -> Result<Ty<'tcx>, Vec<E>> {
-        self.structurally_normalize_term(ty.into(), fulfill_cx).map(|term| term.expect_type())
+        self.structurally_normalize_term(ty.map_inner(Into::into), fulfill_cx)
+            .map(|term| term.expect_type())
     }
 
     fn structurally_normalize_const<E: 'tcx>(
         &self,
-        ct: ty::Const<'tcx>,
+        ct: Unnormalized<ty::Const<'tcx>>,
         fulfill_cx: &mut dyn TraitEngine<'tcx, E>,
     ) -> Result<ty::Const<'tcx>, Vec<E>> {
         if self.infcx.tcx.features().generic_const_exprs() {
-            return Ok(super::evaluate_const(&self.infcx, ct, self.param_env));
+            return Ok(super::evaluate_const(&self.infcx, ct.inside_norm(), self.param_env));
         }
 
-        self.structurally_normalize_term(ct.into(), fulfill_cx).map(|term| term.expect_const())
+        self.structurally_normalize_term(ct.map_inner(Into::into), fulfill_cx)
+            .map(|term| term.expect_const())
     }
 
     fn structurally_normalize_term<E: 'tcx>(
         &self,
-        term: ty::Term<'tcx>,
+        term: Unnormalized<ty::Term<'tcx>>,
         fulfill_cx: &mut dyn TraitEngine<'tcx, E>,
     ) -> Result<ty::Term<'tcx>, Vec<E>> {
-        assert!(!term.is_infer(), "should have resolved vars before calling");
+        assert!(!term.apply(|v| v.is_infer()), "should have resolved vars before calling");
 
         if self.infcx.next_trait_solver() {
+            let term = term.inside_norm();
             if let None = term.to_alias_term() {
                 return Ok(term);
             }
