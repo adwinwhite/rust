@@ -207,13 +207,14 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
     #[instrument(skip(self), level = "debug")]
     pub(super) fn normalize_with_category<T>(
         &mut self,
-        value: T,
+        value: Unnormalized<'tcx, T>,
         location: impl NormalizeLocation,
         category: ConstraintCategory<'tcx>,
     ) -> T
     where
         T: type_op::normalize::Normalizable<'tcx> + fmt::Display + Copy + 'tcx,
     {
+        let value = value.inside_norm();
         let param_env = self.infcx.param_env;
         let result: Result<_, ErrorGuaranteed> = self.fully_perform_op(
             location.to_locations(),

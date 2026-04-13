@@ -382,8 +382,9 @@ impl<'tcx> GenericPredicates<'tcx> {
         self,
         tcx: TyCtxt<'tcx>,
         args: GenericArgsRef<'tcx>,
-    ) -> impl Iterator<Item = (Unnormalized<Clause<'tcx>>, Span)> + DoubleEndedIterator + ExactSizeIterator
-    {
+    ) -> impl Iterator<Item = (Unnormalized<'tcx, Clause<'tcx>>, Span)>
+    + DoubleEndedIterator
+    + ExactSizeIterator {
         EarlyBinder::bind(self.predicates).iter_instantiated_copied(tcx, args).map(|u| {
             let (clause, span) = u.unzip();
             (clause, span.skip_normalization())
@@ -392,8 +393,9 @@ impl<'tcx> GenericPredicates<'tcx> {
 
     pub fn instantiate_own_identity(
         self,
-    ) -> impl Iterator<Item = (Unnormalized<Clause<'tcx>>, Span)> + DoubleEndedIterator + ExactSizeIterator
-    {
+    ) -> impl Iterator<Item = (Unnormalized<'tcx, Clause<'tcx>>, Span)>
+    + DoubleEndedIterator
+    + ExactSizeIterator {
         EarlyBinder::bind(self.predicates).iter_identity_copied().map(|u| {
             let (clause, span) = u.unzip();
             (clause, span.skip_normalization())
@@ -450,7 +452,7 @@ impl<'tcx> ConstConditions<'tcx> {
         self,
         tcx: TyCtxt<'tcx>,
         args: GenericArgsRef<'tcx>,
-    ) -> Vec<(Unnormalized<ty::PolyTraitRef<'tcx>>, Span)> {
+    ) -> Vec<(Unnormalized<'tcx, ty::PolyTraitRef<'tcx>>, Span)> {
         let mut instantiated = vec![];
         self.instantiate_into(tcx, &mut instantiated, args);
         instantiated
@@ -460,7 +462,7 @@ impl<'tcx> ConstConditions<'tcx> {
         self,
         tcx: TyCtxt<'tcx>,
         args: GenericArgsRef<'tcx>,
-    ) -> impl Iterator<Item = (Unnormalized<ty::PolyTraitRef<'tcx>>, Span)>
+    ) -> impl Iterator<Item = (Unnormalized<'tcx, ty::PolyTraitRef<'tcx>>, Span)>
     + DoubleEndedIterator
     + ExactSizeIterator {
         EarlyBinder::bind(self.predicates).iter_instantiated_copied(tcx, args).map(|u| {
@@ -471,7 +473,7 @@ impl<'tcx> ConstConditions<'tcx> {
 
     pub fn instantiate_own_identity(
         self,
-    ) -> impl Iterator<Item = (Unnormalized<ty::PolyTraitRef<'tcx>>, Span)>
+    ) -> impl Iterator<Item = (Unnormalized<'tcx, ty::PolyTraitRef<'tcx>>, Span)>
     + DoubleEndedIterator
     + ExactSizeIterator {
         EarlyBinder::bind(self.predicates).iter_identity_copied().map(|u| {
@@ -484,7 +486,7 @@ impl<'tcx> ConstConditions<'tcx> {
     fn instantiate_into(
         self,
         tcx: TyCtxt<'tcx>,
-        instantiated: &mut Vec<(Unnormalized<ty::PolyTraitRef<'tcx>>, Span)>,
+        instantiated: &mut Vec<(Unnormalized<'tcx, ty::PolyTraitRef<'tcx>>, Span)>,
         args: GenericArgsRef<'tcx>,
     ) {
         if let Some(def_id) = self.parent {
@@ -498,7 +500,7 @@ impl<'tcx> ConstConditions<'tcx> {
     pub fn instantiate_identity(
         self,
         tcx: TyCtxt<'tcx>,
-    ) -> Vec<(Unnormalized<ty::PolyTraitRef<'tcx>>, Span)> {
+    ) -> Vec<(Unnormalized<'tcx, ty::PolyTraitRef<'tcx>>, Span)> {
         let mut instantiated = vec![];
         self.instantiate_identity_into(tcx, &mut instantiated);
         instantiated
@@ -507,7 +509,7 @@ impl<'tcx> ConstConditions<'tcx> {
     fn instantiate_identity_into(
         self,
         tcx: TyCtxt<'tcx>,
-        instantiated: &mut Vec<(Unnormalized<ty::PolyTraitRef<'tcx>>, Span)>,
+        instantiated: &mut Vec<(Unnormalized<'tcx, ty::PolyTraitRef<'tcx>>, Span)>,
     ) {
         if let Some(def_id) = self.parent {
             tcx.const_conditions(def_id).instantiate_identity_into(tcx, instantiated);
