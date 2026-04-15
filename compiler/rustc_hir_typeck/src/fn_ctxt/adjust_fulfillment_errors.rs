@@ -57,7 +57,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     .into_iter()
                     .nth(idx) =>
             {
-                pred
+                pred.skip_norm_wip()
             }
             ClauseFlavor::Const
                 if let Some((pred, _)) = self
@@ -67,7 +67,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     .into_iter()
                     .nth(idx) =>
             {
-                pred.to_host_effect_clause(self.tcx, ty::BoundConstness::Maybe)
+                pred.skip_norm_wip().to_host_effect_clause(self.tcx, ty::BoundConstness::Maybe)
             }
             _ => return false,
         };
@@ -524,7 +524,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 {
                     return Some((
                         expr_field.expr,
-                        self.tcx.type_of(field.did).instantiate_identity(),
+                        self.tcx.type_of(field.did).instantiate_identity().skip_norm_wip(),
                     ));
                 }
             }
@@ -552,7 +552,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         receiver: Option<&'tcx hir::Expr<'tcx>>,
         args: &'tcx [hir::Expr<'tcx>],
     ) -> bool {
-        let ty = self.tcx.type_of(def_id).instantiate_identity();
+        let ty = self.tcx.type_of(def_id).instantiate_identity().skip_norm_wip();
         if !ty.is_fn() {
             return false;
         }

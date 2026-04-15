@@ -75,21 +75,23 @@ fn normalize_canonicalized_free_alias<'tcx>(
     tcx.infer_ctxt().enter_canonical_trait_query(
         &goal,
         |ocx, ParamEnvAnd { param_env, value: goal }| {
-            let obligations = tcx.predicates_of(goal.def_id).instantiate_own(tcx, goal.args).map(
-                |(predicate, span)| {
+            let obligations = tcx
+                .predicates_of(goal.def_id)
+                .instantiate_own(tcx, goal.args)
+                .map(|(c, s)| (c.skip_norm_wip(), s))
+                .map(|(predicate, span)| {
                     traits::Obligation::new(
                         tcx,
                         ObligationCause::dummy_with_span(span),
                         param_env,
                         predicate,
                     )
-                },
-            );
+                });
             ocx.register_obligations(obligations);
             let normalized_term = if goal.kind(tcx).is_type() {
-                tcx.type_of(goal.def_id).instantiate(tcx, goal.args).into()
+                tcx.type_of(goal.def_id).instantiate(tcx, goal.args).skip_norm_wip().into()
             } else {
-                tcx.const_of_item(goal.def_id).instantiate(tcx, goal.args).into()
+                tcx.const_of_item(goal.def_id).instantiate(tcx, goal.args).skip_norm_wip().into()
             };
             Ok(NormalizationResult { normalized_term })
         },

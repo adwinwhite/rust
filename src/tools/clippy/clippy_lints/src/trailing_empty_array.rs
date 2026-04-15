@@ -1,5 +1,6 @@
 use clippy_utils::diagnostics::span_lint_and_help;
 use clippy_utils::{has_repr_attr, is_in_test};
+use rustc_middle::ty::Unnormalized;
 use rustc_hir::{Item, ItemKind};
 use rustc_lint::{LateContext, LateLintPass};
 use rustc_middle::ty;
@@ -60,10 +61,7 @@ impl<'tcx> LateLintPass<'tcx> for TrailingEmptyArray {
 fn is_struct_with_trailing_zero_sized_array<'tcx>(cx: &LateContext<'tcx>, item: &Item<'tcx>) -> bool {
     if let ItemKind::Struct(_, _, data) = &item.kind
         && let Some(last_field) = data.fields().last()
-        && let field_ty = cx.tcx.normalize_erasing_regions(
-            cx.typing_env(),
-            cx.tcx.type_of(last_field.def_id).instantiate_identity(),
-        )
+        && let field_ty = cx.tcx.normalize_erasing_regions(cx.typing_env(), Unnormalized::new_wip(cx.tcx.type_of(last_field.def_id).instantiate_identity().skip_norm_wip()))
         && let ty::Array(_, array_len) = *field_ty.kind()
         && let Some(0) = array_len.try_to_target_usize(cx.tcx)
     {

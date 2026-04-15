@@ -5,6 +5,7 @@ use clippy_utils::msrvs::{self, Msrv};
 use clippy_utils::source::snippet_with_context;
 use clippy_utils::ty::{implements_trait, is_copy};
 use clippy_utils::{DefinedTy, ExprUseNode, expr_use_ctxt, peel_n_hir_expr_refs, sym};
+use rustc_middle::ty::Unnormalized;
 use rustc_errors::Applicability;
 use rustc_hir::def::{DefKind, Res};
 use rustc_hir::def_id::{DefId, LocalDefId};
@@ -178,7 +179,7 @@ fn needless_borrow_count<'tcx>(
     let meta_sized_trait_def_id = cx.tcx.lang_items().meta_sized_trait();
     let drop_trait_def_id = cx.tcx.lang_items().drop_trait();
 
-    let fn_sig = cx.tcx.fn_sig(fn_id).instantiate_identity().skip_binder();
+    let fn_sig = cx.tcx.fn_sig(fn_id).instantiate_identity().skip_norm_wip().skip_binder();
     let predicates = cx.tcx.param_env(fn_id).caller_bounds();
     let projection_predicates = predicates
         .iter()
@@ -279,7 +280,7 @@ fn needless_borrow_count<'tcx>(
                 return false;
             }
 
-            let predicate = EarlyBinder::bind(predicate).instantiate(cx.tcx, &args_with_referent_ty[..]);
+            let predicate = EarlyBinder::bind(predicate).instantiate(cx.tcx, &args_with_referent_ty[..]).skip_norm_wip();
             let obligation = Obligation::new(cx.tcx, ObligationCause::dummy(), cx.param_env, predicate);
             let infcx = cx.tcx.infer_ctxt().build(cx.typing_mode());
             infcx.predicate_must_hold_modulo_regions(&obligation)
@@ -305,8 +306,7 @@ fn has_ref_mut_self_method(cx: &LateContext<'_>, trait_def_id: DefId) -> bool {
             if assoc_item.is_method() {
                 let self_ty = cx
                     .tcx
-                    .fn_sig(assoc_item.def_id)
-                    .instantiate_identity()
+                    .fn_sig(assoc_item.def_id).instantiate_identity().skip_norm_wip()
                     .skip_binder()
                     .inputs()[0];
                 matches!(self_ty.kind(), ty::Ref(_, _, Mutability::Mut))
@@ -427,7 +427,7 @@ fn replace_types<'tcx>(
                         .expect_ty(cx.tcx)
                         .to_ty(cx.tcx);
 
-                    if let Ok(projected_ty) = cx.tcx.try_normalize_erasing_regions(cx.typing_env(), projection)
+                    if let Ok(projected_ty) = cx.tcx.try_normalize_erasing_regions(cx.typing_env(), Unnormalized::new_wip(projection))
                         && args[term_param_ty.index as usize] != GenericArg::from(projected_ty)
                     {
                         deque.push_back((*term_param_ty, projected_ty));

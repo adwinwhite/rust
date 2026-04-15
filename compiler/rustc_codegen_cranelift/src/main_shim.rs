@@ -50,7 +50,7 @@ pub(crate) fn maybe_create_entry_wrapper(
         // listing.
         let main_ret_ty = tcx.normalize_erasing_regions(
             ty::TypingEnv::fully_monomorphized(),
-            main_ret_ty.no_bound_vars().unwrap(),
+            Unnormalized::new_wip(main_ret_ty.no_bound_vars().unwrap()),
         );
 
         let cmain_sig = Signature {
