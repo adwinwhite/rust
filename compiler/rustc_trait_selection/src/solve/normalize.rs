@@ -4,7 +4,7 @@ use rustc_data_structures::stack::ensure_sufficient_stack;
 use rustc_infer::infer::InferCtxt;
 use rustc_infer::infer::at::At;
 use rustc_infer::traits::solve::Goal;
-use rustc_infer::traits::{FromSolverError, Obligation, TraitEngine};
+use rustc_infer::traits::{FromSolverError, Obligation, PredicateObligations, TraitEngine};
 use rustc_middle::traits::ObligationCause;
 use rustc_middle::ty::{
     self, FallibleTypeFolder, Ty, TyCtxt, TypeFoldable, TypeFolder, TypeSuperFoldable,
@@ -16,6 +16,38 @@ use super::{FulfillmentCtxt, NextSolverError};
 use crate::error_reporting::InferCtxtErrorExt;
 use crate::error_reporting::traits::OverflowCause;
 use crate::traits::{BoundVarReplacer, PlaceholderReplacer, ScrubbedTraitError};
+
+pub struct Normalized<'tcx, T> {
+    pub value: T,
+    pub obligations: PredicateObligations<'tcx>,
+    pub has_ambig_hr_alias: bool,
+    pub has_errors: bool,
+}
+
+pub fn deeply_normalize_handling_ambiguity<'tcx, T>(
+    at: At<'_, 'tcx>,
+    value: Unnormalized<'tcx, T>,
+) -> Normalized<'tcx, T>
+where
+    T: TypeFoldable<TyCtxt<'tcx>>,
+{
+    let value = value.skip_normalization();
+    let mut folder = ForgivingNormalizationFolder {
+        at,
+        depth: 0,
+        universes: vec![],
+        obligations: Default::default(),
+        has_ambig_hr_alias: false,
+        has_errors: false,
+    };
+    let value = value.fold_with(&mut folder);
+    Normalized {
+        value,
+        obligations: folder.obligations,
+        has_ambig_hr_alias: folder.has_ambig_hr_alias,
+        has_errors: folder.has_errors,
+    }
+}
 
 /// Deeply normalize all aliases in `value`. This does not handle inference and expects
 /// its input to be already fully resolved.
@@ -85,6 +117,178 @@ where
     let value = value.try_fold_with(&mut folder)?;
     let errors = folder.fulfill_cx.evaluate_obligations_error_on_ambiguity(at.infcx);
     if errors.is_empty() { Ok((value, folder.stalled_coroutine_goals)) } else { Err(errors) }
+}
+
+struct ForgivingNormalizationFolder<'me, 'tcx> {
+    at: At<'me, 'tcx>,
+    depth: usize,
+    universes: Vec<Option<UniverseIndex>>,
+    obligations: PredicateObligations<'tcx>,
+    has_ambig_hr_alias: bool,
+    has_errors: bool,
+}
+
+impl<'tcx> ForgivingNormalizationFolder<'_, 'tcx> {
+    // imitate the old solver. this is quite subtle about ambiguity and error.
+    // for error, we return an infer var with the failed AliasRelate obligation.
+    // for ambiguity, we have two cases:
+    //   - has_escaping_bound_vars: return the original alias.
+    //   - otherwise: use the normalized as it may be partially inferred.
+    fn normalize_alias_term(
+        &mut self,
+        alias_term: ty::Term<'tcx>,
+        has_escaping: bool,
+    ) -> ty::Term<'tcx> {
+        let infcx = self.at.infcx;
+        let tcx = infcx.tcx;
+        let recursion_limit = tcx.recursion_limit();
+        if !recursion_limit.value_within_limit(self.depth) {
+            let term = alias_term.to_alias_term().unwrap();
+
+            self.at.infcx.err_ctxt().report_overflow_error(
+                OverflowCause::DeeplyNormalize(term),
+                self.at.cause.span,
+                true,
+                |_| {},
+            );
+        }
+
+        self.depth += 1;
+
+        let infer_term = infcx.next_term_var_of_kind(alias_term, self.at.cause.span);
+        let obligation = Obligation::new(
+            tcx,
+            self.at.cause.clone(),
+            self.at.param_env,
+            ty::PredicateKind::AliasRelate(
+                alias_term.into(),
+                infer_term.into(),
+                ty::AliasRelationDirection::Equate,
+            ),
+        );
+
+        let mut fulfill_cx = FulfillmentCtxt::<'_, ScrubbedTraitError<'tcx>>::new(infcx);
+        fulfill_cx.register_predicate_obligation(infcx, obligation);
+        let errors = fulfill_cx.try_evaluate_obligations(infcx);
+        if !errors.is_empty() {
+            self.has_errors = true;
+            self.depth -= 1;
+            let term = self.error_to_infer(alias_term);
+            return term;
+        }
+
+        if fulfill_cx.has_pending_obligations() && has_escaping {
+            self.depth -= 1;
+            self.has_ambig_hr_alias = true;
+            return alias_term;
+        }
+
+        // FIXME: just drain all to avoid this allocation.
+        self.obligations.extend(fulfill_cx.pending_obligations());
+
+        // Alias is guaranteed to be fully structurally resolved,
+        // so we can super fold here.
+        let term = infcx.resolve_vars_if_possible(infer_term);
+        // super-folding the `term` will directly fold the `Ty` or `Const` so
+        // we have to match on the term and super-fold them manually.
+        let result = match term.kind() {
+            ty::TermKind::Ty(ty) => ty.super_fold_with(self).into(),
+            ty::TermKind::Const(ct) => ct.super_fold_with(self).into(),
+        };
+        self.depth -= 1;
+        result
+    }
+
+    fn error_to_infer(&mut self, alias_term: ty::Term<'tcx>) -> ty::Term<'tcx> {
+        let infcx = self.at.infcx;
+        let infer_term = infcx.next_term_var_of_kind(alias_term, self.at.cause.span);
+        let obligation = Obligation::new(
+            infcx.tcx,
+            self.at.cause.clone(),
+            self.at.param_env,
+            ty::PredicateKind::AliasRelate(
+                alias_term.into(),
+                infer_term.into(),
+                ty::AliasRelationDirection::Equate,
+            ),
+        );
+        self.obligations.push(obligation);
+        infer_term
+    }
+}
+
+impl<'tcx> TypeFolder<TyCtxt<'tcx>> for ForgivingNormalizationFolder<'_, 'tcx> {
+    fn cx(&self) -> TyCtxt<'tcx> {
+        self.at.infcx.tcx
+    }
+
+    fn fold_binder<T: TypeFoldable<TyCtxt<'tcx>>>(
+        &mut self,
+        t: ty::Binder<'tcx, T>,
+    ) -> ty::Binder<'tcx, T> {
+        self.universes.push(None);
+        let t = t.super_fold_with(self);
+        self.universes.pop();
+        t
+    }
+
+    #[instrument(level = "trace", skip(self), ret)]
+    fn fold_ty(&mut self, ty: Ty<'tcx>) -> Ty<'tcx> {
+        let infcx = self.at.infcx;
+        // We may have resolved some ty vars when normalizing parent structures.
+        let ty = infcx.shallow_resolve(ty);
+        if !ty.has_aliases() {
+            return ty;
+        }
+
+        let ty::Alias(..) = *ty.kind() else { return ty.super_fold_with(self) };
+
+        if ty.has_escaping_bound_vars() {
+            let (ty, mapped_regions, mapped_types, mapped_consts) =
+                BoundVarReplacer::replace_bound_vars(infcx, &mut self.universes, ty);
+            let result = ensure_sufficient_stack(|| self.normalize_alias_term(ty.into(), true))
+                .expect_type();
+            PlaceholderReplacer::replace_placeholders(
+                infcx,
+                mapped_regions,
+                mapped_types,
+                mapped_consts,
+                &self.universes,
+                result,
+            )
+        } else {
+            ensure_sufficient_stack(|| self.normalize_alias_term(ty.into(), false)).expect_type()
+        }
+    }
+
+    #[instrument(level = "trace", skip(self), ret)]
+    fn fold_const(&mut self, ct: ty::Const<'tcx>) -> ty::Const<'tcx> {
+        let infcx = self.at.infcx;
+        // We may have resolved some ty vars when normalizing parent structures.
+        let ct = infcx.shallow_resolve_const(ct);
+        if !ct.has_aliases() {
+            return ct;
+        }
+
+        let ty::ConstKind::Unevaluated(..) = ct.kind() else { return ct.super_fold_with(self) };
+
+        if ct.has_escaping_bound_vars() {
+            let (ct, mapped_regions, mapped_types, mapped_consts) =
+                BoundVarReplacer::replace_bound_vars(infcx, &mut self.universes, ct);
+            let result = ensure_sufficient_stack(|| self.normalize_alias_term(ct.into(), true))
+                .expect_const();
+            PlaceholderReplacer::replace_placeholders(
+                infcx,
+                mapped_regions,
+                mapped_types,
+                mapped_consts,
+                &self.universes,
+                result,
+            )
+        } else {
+            ensure_sufficient_stack(|| self.normalize_alias_term(ct.into(), false)).expect_const()
+        }
+    }
 }
 
 struct NormalizationFolder<'me, 'tcx, E> {

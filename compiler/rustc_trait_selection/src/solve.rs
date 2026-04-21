@@ -10,7 +10,8 @@ pub(crate) use delegate::SolverDelegate;
 pub use fulfill::{FulfillmentCtxt, NextSolverError, StalledOnCoroutines};
 pub(crate) use normalize::deeply_normalize_for_diagnostics;
 pub use normalize::{
-    deeply_normalize, deeply_normalize_with_skipped_universes,
+    Normalized, deeply_normalize, deeply_normalize_handling_ambiguity,
+    deeply_normalize_with_skipped_universes,
     deeply_normalize_with_skipped_universes_and_ambiguous_coroutine_goals,
 };
 use rustc_middle::query::Providers;
