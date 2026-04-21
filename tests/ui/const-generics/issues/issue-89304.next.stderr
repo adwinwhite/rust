@@ -1,0 +1,57 @@
+error: `-Znext-solver=globally` and `generic_const_exprs` are incompatible, using them at the same time is not allowed
+  --> $DIR/issue-89304.rs:6:12
+   |
+LL | #![feature(generic_const_exprs)]
+   |            ^^^^^^^^^^^^^^^^^^^
+   |
+   = help: remove one of these features
+
+error[E0391]: cycle detected when building an abstract representation for `<impl at $DIR/issue-89304.rs:11:1: 11:71>::{constant#0}`
+  --> $DIR/issue-89304.rs:11:63
+   |
+LL | impl<const T: usize> From<GenericStruct<T>> for GenericStruct<{T + 1}> {
+   |                                                               ^^^^^^^
+   |
+note: ...which requires building THIR for `<impl at $DIR/issue-89304.rs:11:1: 11:71>::{constant#0}`...
+  --> $DIR/issue-89304.rs:11:63
+   |
+LL | impl<const T: usize> From<GenericStruct<T>> for GenericStruct<{T + 1}> {
+   |                                                               ^^^^^^^
+note: ...which requires type-checking `<impl at $DIR/issue-89304.rs:11:1: 11:71>::{constant#0}`...
+  --> $DIR/issue-89304.rs:11:63
+   |
+LL | impl<const T: usize> From<GenericStruct<T>> for GenericStruct<{T + 1}> {
+   |                                                               ^^^^^^^
+note: ...which requires computing normalized predicates of `<impl at $DIR/issue-89304.rs:11:1: 11:71>::{constant#0}`...
+  --> $DIR/issue-89304.rs:11:63
+   |
+LL | impl<const T: usize> From<GenericStruct<T>> for GenericStruct<{T + 1}> {
+   |                                                               ^^^^^^^
+note: ...which requires evaluating type-level constant...
+  --> $DIR/issue-89304.rs:11:63
+   |
+LL | impl<const T: usize> From<GenericStruct<T>> for GenericStruct<{T + 1}> {
+   |                                                               ^^^^^^^
+note: ...which requires const-evaluating + checking `<impl at $DIR/issue-89304.rs:11:1: 11:71>::{constant#0}`...
+  --> $DIR/issue-89304.rs:11:63
+   |
+LL | impl<const T: usize> From<GenericStruct<T>> for GenericStruct<{T + 1}> {
+   |                                                               ^^^^^^^
+note: ...which requires checking if `<impl at $DIR/issue-89304.rs:11:1: 11:71>::{constant#0}` is a trivial const...
+  --> $DIR/issue-89304.rs:11:63
+   |
+LL | impl<const T: usize> From<GenericStruct<T>> for GenericStruct<{T + 1}> {
+   |                                                               ^^^^^^^
+note: ...which requires building MIR for `<impl at $DIR/issue-89304.rs:11:1: 11:71>::{constant#0}`...
+  --> $DIR/issue-89304.rs:11:63
+   |
+LL | impl<const T: usize> From<GenericStruct<T>> for GenericStruct<{T + 1}> {
+   |                                                               ^^^^^^^
+   = note: ...which again requires building an abstract representation for `<impl at $DIR/issue-89304.rs:11:1: 11:71>::{constant#0}`, completing the cycle
+note: cycle used when building specialization graph of trait `core::convert::From`
+  --> $SRC_DIR/core/src/convert/mod.rs:LL:COL
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
+
+error: aborting due to 2 previous errors
+
+For more information about this error, try `rustc --explain E0391`.
