@@ -256,7 +256,7 @@ fn do_normalize_predicates<'tcx>(
     tcx: TyCtxt<'tcx>,
     cause: ObligationCause<'tcx>,
     elaborated_env: ty::ParamEnv<'tcx>,
-    predicates: Vec<ty::Clause<'tcx>>,
+    mut predicates: Vec<ty::Clause<'tcx>>,
 ) -> Result<Vec<ty::Clause<'tcx>>, ErrorGuaranteed> {
     let span = cause.span;
 
@@ -273,14 +273,19 @@ fn do_normalize_predicates<'tcx>(
     // by wfcheck anyway, so I'm not sure we have to check
     // them here too, and we will remove this function when
     // we move over to lazy normalization *anyway*.
+    //
+    // Even if we move back to eager normalization elsewhere,
+    // param env normalization remains lazy in the next solver.
     let infcx = tcx.infer_ctxt().ignoring_regions().build(TypingMode::non_body_analysis());
-    let ocx = ObligationCtxt::new_with_diagnostics(&infcx);
-    let predicates = ocx.normalize(&cause, elaborated_env, Unnormalized::new_wip(predicates));
+    if !tcx.next_trait_solver_globally() {
+        let ocx = ObligationCtxt::new_with_diagnostics(&infcx);
+        predicates = ocx.normalize(&cause, elaborated_env, Unnormalized::new_wip(predicates));
 
-    let errors = ocx.evaluate_obligations_error_on_ambiguity();
-    if !errors.is_empty() {
-        let reported = infcx.err_ctxt().report_fulfillment_errors(errors);
-        return Err(reported);
+        let errors = ocx.evaluate_obligations_error_on_ambiguity();
+        if !errors.is_empty() {
+            let reported = infcx.err_ctxt().report_fulfillment_errors(errors);
+            return Err(reported);
+        }
     }
 
     debug!("do_normalize_predicates: normalized predicates = {:?}", predicates);
