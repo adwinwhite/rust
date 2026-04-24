@@ -17,6 +17,9 @@ use crate::error_reporting::InferCtxtErrorExt;
 use crate::error_reporting::traits::OverflowCause;
 use crate::traits::{BoundVarReplacer, PlaceholderReplacer, ScrubbedTraitError};
 
+/// We have to record error as a field because `infcx.at.normalize` or more widely used
+/// `ocx.normalize` only expects an normalized value + obligations.
+/// Errors can be reproduced by evaluating the obligations if any.
 pub struct Normalized<'tcx, T> {
     pub value: T,
     pub obligations: PredicateObligations<'tcx>,
@@ -24,6 +27,13 @@ pub struct Normalized<'tcx, T> {
     pub has_errors: bool,
 }
 
+/// Like `deeply_normalize`, but we handle ambiguity in this routine.
+/// The behavior should be same as the old solver.
+/// For error, we return an infer var with the failed AliasRelate obligation.
+/// For ambiguity, we have two cases:
+///   - has_escaping_bound_vars: return the original alias.
+///   - otherwise: return the normalized result. It can be (partially) inferred
+///     even if the evaluation result is ambiguous.
 pub fn deeply_normalize_handling_ambiguity<'tcx, T>(
     at: At<'_, 'tcx>,
     value: Unnormalized<'tcx, T>,
@@ -129,11 +139,6 @@ struct ForgivingNormalizationFolder<'me, 'tcx> {
 }
 
 impl<'tcx> ForgivingNormalizationFolder<'_, 'tcx> {
-    // imitate the old solver. this is quite subtle about ambiguity and error.
-    // for error, we return an infer var with the failed AliasRelate obligation.
-    // for ambiguity, we have two cases:
-    //   - has_escaping_bound_vars: return the original alias.
-    //   - otherwise: use the normalized as it may be partially inferred.
     fn normalize_alias_term(
         &mut self,
         alias_term: ty::Term<'tcx>,
@@ -167,6 +172,8 @@ impl<'tcx> ForgivingNormalizationFolder<'_, 'tcx> {
             ),
         );
 
+        // FIXME: maybe use `evaluate_root_goal` and check ambiguity manually.
+        // That has less overhead?
         let mut fulfill_cx = FulfillmentCtxt::<'_, ScrubbedTraitError<'tcx>>::new(infcx);
         fulfill_cx.register_predicate_obligation(infcx, obligation);
         let errors = fulfill_cx.try_evaluate_obligations(infcx);
@@ -177,6 +184,8 @@ impl<'tcx> ForgivingNormalizationFolder<'_, 'tcx> {
             return term;
         }
 
+        // Return ambiguous higher ranked alias as is if it contains escaping vars.
+        // We can normalize it again after the binder is instantiated.
         if fulfill_cx.has_pending_obligations() && has_escaping {
             self.depth -= 1;
             self.has_ambig_hr_alias = true;
