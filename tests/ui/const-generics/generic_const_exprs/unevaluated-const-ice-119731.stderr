@@ -1,5 +1,5 @@
 error[E0432]: unresolved import `v20::v13`
-  --> $DIR/unevaluated-const-ice-119731.rs:42:15
+  --> $DIR/unevaluated-const-ice-119731.rs:39:15
    |
 LL | pub use v20::{v13, v17};
    |               ^^^ no `v13` in `v20`
@@ -32,7 +32,7 @@ LL +         pub const fn v21() -> v11 {}
    |
 
 error[E0425]: cannot find type `v18` in this scope
-  --> $DIR/unevaluated-const-ice-119731.rs:35:31
+  --> $DIR/unevaluated-const-ice-119731.rs:32:31
    |
 LL |     pub type v11 = [[usize; v4]; v4];
    |     --------------------------------- similarly named type alias `v11` defined here
@@ -47,7 +47,7 @@ LL +         pub const fn v21() -> v11 {
    |
 
 error[E0422]: cannot find struct, variant or union type `v18` in this scope
-  --> $DIR/unevaluated-const-ice-119731.rs:37:13
+  --> $DIR/unevaluated-const-ice-119731.rs:34:13
    |
 LL |     pub type v11 = [[usize; v4]; v4];
    |     --------------------------------- similarly named type alias `v11` defined here
