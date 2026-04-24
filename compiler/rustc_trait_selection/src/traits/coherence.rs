@@ -230,6 +230,9 @@ fn fresh_impl_header_normalized<'tcx>(
 ) -> ImplHeader<'tcx> {
     let header = fresh_impl_header(infcx, impl_def_id, is_of_trait);
 
+    // FIXME: If we normalize the header, it can break `tests/ui/const-generics/issues/issue-89304.rs`
+    // because we replace unevaluated consts with infer vars and then they can unify with
+    // anything.
     let InferOk { value: mut header, obligations } =
         infcx.at(&ObligationCause::dummy(), param_env).normalize(Unnormalized::new_wip(header));
 

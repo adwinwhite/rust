@@ -1437,28 +1437,9 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     /// In case there is still ambiguity, the returned type may be an inference
     /// variable. This is different from `structurally_resolve_type` which errors
     /// in this case.
-    #[instrument(level = "debug", skip(self, sp), ret)]
-    pub(crate) fn try_structurally_resolve_type(&self, sp: Span, ty: Ty<'tcx>) -> Ty<'tcx> {
-        if self.next_trait_solver()
-            && let ty::Alias(..) = ty.kind()
-        {
-            // We need to use a separate variable here as otherwise the temporary for
-            // `self.fulfillment_cx.borrow_mut()` is alive in the `Err` branch, resulting
-            // in a reentrant borrow, causing an ICE.
-            let result = self.at(&self.misc(sp), self.param_env).structurally_normalize_ty(
-                Unnormalized::new_wip(ty),
-                &mut **self.fulfillment_cx.borrow_mut(),
-            );
-            match result {
-                Ok(normalized_ty) => normalized_ty,
-                Err(errors) => {
-                    let guar = self.err_ctxt().report_fulfillment_errors(errors);
-                    return Ty::new_error(self.tcx, guar);
-                }
-            }
-        } else {
-            self.resolve_vars_with_obligations(ty)
-        }
+    #[instrument(level = "debug", skip(self, _sp), ret)]
+    pub(crate) fn try_structurally_resolve_type(&self, _sp: Span, ty: Ty<'tcx>) -> Ty<'tcx> {
+        self.resolve_vars_with_obligations(ty)
     }
 
     #[instrument(level = "debug", skip(self, sp), ret)]
