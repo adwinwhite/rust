@@ -9,6 +9,6 @@ fn main() {
     for _ in HashMap::new().iter().cloned() {}
     //[current]~^ ERROR expected `Iter<'_, _, _>` to be an iterator that yields `&_`, but it yields `(&_, &_)`
     //[current]~| ERROR expected `Iter<'_, _, _>` to be an iterator that yields `&_`, but it yields `(&_, &_)`
-    //[next]~^^^ ERROR: type mismatch resolving `<Iter<'_, _, _> as Iterator>::Item == &_`
-    //[next]~| ERROR: type mismatch resolving `<Iter<'_, _, _> as Iterator>::Item == &_`
+    //[next]~^^^ ERROR: expected `Iter<'_, _, _>` to be an iterator that yields `&_`, but it yields `(&_, &_)`
+    //[next]~| ERROR: expected `Iter<'_, _, _>` to be an iterator that yields `&_`, but it yields `(&_, &_)`
 }
