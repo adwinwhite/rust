@@ -1,0 +1,17 @@
+error[E0119]: conflicting implementations of trait `Add<Quantity<_, Dimension>>` for type `Quantity<_, Dimension>`
+  --> $DIR/gce-ice-119692.rs:24:1
+   |
+LL | / impl<const D: Dimension, LHS, RHS> Add<Quantity<RHS, D>> for Quantity<LHS, D>
+LL | | where
+LL | |     LHS: Add<RHS>,
+   | |__________________- first implementation here
+...
+LL | / impl<LHS, RHS> Add<RHS> for Quantity<LHS, { Dimension }>
+LL | |
+LL | | where
+LL | |     LHS: Add<RHS>,
+   | |__________________^ conflicting implementation for `Quantity<_, Dimension>`
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0119`.

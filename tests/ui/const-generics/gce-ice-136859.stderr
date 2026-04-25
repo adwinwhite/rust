@@ -1,0 +1,42 @@
+error[E0437]: type `Msg` is not a member of trait `IsZero`
+  --> $DIR/gce-ice-136859.rs:16:5
+   |
+LL |     type Msg = True;
+   |     ^^^^^^^^^^^^^^^^ not a member of trait `IsZero`
+
+error[E0046]: not all trait items implemented, missing: `Answer`
+  --> $DIR/gce-ice-136859.rs:13:1
+   |
+LL |       type Answer;
+   |       ----------- `Answer` from trait
+...
+LL | / impl<const N: u8> IsZero<N> for ()
+LL | |
+LL | | where (): If<{N == 0}> {
+   | |______________________^ missing `Answer` in implementation
+
+error[E0119]: conflicting implementations of trait `Foobar<_>` for type `()`
+  --> $DIR/gce-ice-136859.rs:25:1
+   |
+LL | / impl<const N: u8> Foobar<N> for ()
+LL | | where (): IsZero<N, Answer = True> {}
+   | |__________________________________- first implementation here
+LL |
+LL | / impl<const N: u8> Foobar<{{ N }}> for ()
+...  |
+LL | | where (): IsZero<N, Answer = False> {}
+   | |___________________________________^ conflicting implementation for `()`
+
+error[E0207]: the const parameter `N` is not constrained by the impl trait, self type, or predicates
+  --> $DIR/gce-ice-136859.rs:25:6
+   |
+LL | impl<const N: u8> Foobar<{{ N }}> for ()
+   |      ^^^^^^^^^^^ unconstrained const parameter
+   |
+   = note: expressions using a const parameter must map each value to a distinct output value
+   = note: proving the result of expressions other than the parameter are unique is not supported
+
+error: aborting due to 4 previous errors
+
+Some errors have detailed explanations: E0046, E0119, E0207, E0437.
+For more information about an error, try `rustc --explain E0046`.

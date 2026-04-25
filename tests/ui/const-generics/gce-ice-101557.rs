@@ -1,4 +1,3 @@
-//@ known-bug: #101557
 //@ compile-flags: -Copt-level=0
 #![feature(generic_const_exprs)]
 use std::marker::PhantomData;
@@ -22,6 +21,7 @@ impl<const N: usize> From<usize> for A<[i8; N]> {
 }
 
 impl<T: Trait> From<A<[i8; T::CONST]>> for A<T> {
+//~^ ERROR: conflicting implementations of trait `From<A<[i8; _]>>` for type `A<[i8; _]>`
     fn from(_: A<[i8; T::CONST]>) -> Self {
         todo!()
     }

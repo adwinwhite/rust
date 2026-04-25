@@ -1,4 +1,3 @@
-//@ known-bug: #119692
 //@ compile-flags: -Copt-level=0
 #![allow(incomplete_features)]
 #![feature(adt_const_params)]
@@ -23,6 +22,7 @@ where
 }
 
 impl<LHS, RHS> Add<RHS> for Quantity<LHS, { Dimension }>
+//~^ ERROR: conflicting implementations of trait `Add<Quantity<_, Dimension>>` for type `Quantity<_, Dimension>`
 where
     LHS: Add<RHS>,
 {
