@@ -23,6 +23,7 @@ use crate::canonical::{
 };
 use crate::coherence;
 use crate::delegate::SolverDelegate;
+use crate::normalize::NormalizationFolder;
 use crate::placeholder::BoundVarReplacer;
 use crate::resolve::eager_resolve_vars;
 use crate::solve::search_graph::SearchGraph;
@@ -1394,6 +1395,48 @@ where
             .clone_opaque_types_added_since(self.initial_opaque_types_storage_num_entries);
 
         ExternalConstraintsData { region_constraints, opaque_types, normalization_nested_goals }
+    }
+
+    pub fn normalize<T: TypeFoldable<I>>(
+        &mut self,
+        param_env: I::ParamEnv,
+        value: ty::Unnormalized<I, T>,
+    ) -> Result<T, NoSolution> {
+        let value = value.skip_normalization();
+        let value = self.delegate.resolve_vars_if_possible(value);
+        // To drop the mutable borrow of self early.
+        let (normalized, stalled_goals) = {
+            let mut folder = NormalizationFolder::new(
+                self.delegate.deref(),
+                vec![],
+                Default::default(),
+                |alias_term| {
+                    let delegate = self.delegate;
+                    let infer_term = self.next_term_infer_of_kind(alias_term);
+                    let predicate = ty::PredicateKind::AliasRelate(
+                        alias_term.into(),
+                        infer_term.into(),
+                        ty::AliasRelationDirection::Equate,
+                    );
+                    let goal = Goal::new(self.delegate.cx(), param_env, predicate);
+                    let result = self.evaluate_goal(GoalSource::Misc, goal, None)?;
+                    let normalized = delegate.resolve_vars_if_possible(infer_term);
+                    let stalled_goal = match result.certainty {
+                        Certainty::Yes => None,
+                        Certainty::Maybe { .. } => {
+                            Some(delegate.resolve_vars_if_possible(result.goal))
+                        }
+                    };
+                    Ok((normalized, stalled_goal))
+                },
+            );
+            let value = value.try_fold_with(&mut folder)?;
+            (value, folder.stalled_goals())
+        };
+
+        // FIXME: what goal source should we use?
+        self.add_goals(GoalSource::Misc, stalled_goals);
+        Ok(normalized)
     }
 }
 
