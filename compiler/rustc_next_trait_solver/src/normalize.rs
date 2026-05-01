@@ -124,7 +124,9 @@ where
 
         let (normalized, ambig_goal) = (self.normalize)(alias_term)?;
 
-        // Return ambiguous higher ranked alias as is if it contains escaping vars.
+        // Return ambiguous higher ranked alias as is if
+        //   - it contains escaping vars,
+        //   - the normalized term contains infer vars which can't be named in current universe.
         // We can normalize it again after the binder is instantiated.
         if ambig_goal.is_some() && has_escaping == HasEscapingBoundVars::Yes {
             let mut visitor = MaxUniverse::new(self.infcx);
