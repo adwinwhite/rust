@@ -2,8 +2,9 @@ use rustc_type_ir::data_structures::ensure_sufficient_stack;
 use rustc_type_ir::inherent::*;
 use rustc_type_ir::solve::{Goal, NoSolution};
 use rustc_type_ir::{
-    self as ty, Binder, FallibleTypeFolder, InferCtxtLike, Interner, TypeFoldable,
-    TypeSuperFoldable, TypeVisitableExt, UniverseIndex,
+    self as ty, Binder, FallibleTypeFolder, InferConst, InferCtxtLike, InferTy, Interner,
+    TypeFoldable, TypeSuperFoldable, TypeSuperVisitable, TypeVisitable, TypeVisitableExt,
+    TypeVisitor, UniverseIndex,
 };
 use tracing::instrument;
 
@@ -30,6 +31,70 @@ enum HasEscapingBoundVars {
     No,
 }
 
+/// Finds the max universe present in infer vars.
+struct MaxUniverse<'a, Infcx, I>
+where
+    Infcx: InferCtxtLike<Interner = I>,
+    I: Interner,
+{
+    infcx: &'a Infcx,
+    max_universe: ty::UniverseIndex,
+}
+
+impl<'a, Infcx, I> MaxUniverse<'a, Infcx, I>
+where
+    Infcx: InferCtxtLike<Interner = I>,
+    I: Interner,
+{
+    fn new(infcx: &'a Infcx) -> Self {
+        MaxUniverse { infcx, max_universe: ty::UniverseIndex::ROOT }
+    }
+
+    fn max_universe(self) -> ty::UniverseIndex {
+        self.max_universe
+    }
+}
+
+impl<'a, Infcx, I> TypeVisitor<I> for MaxUniverse<'a, Infcx, I>
+where
+    Infcx: InferCtxtLike<Interner = I>,
+    I: Interner,
+{
+    fn visit_ty(&mut self, t: I::Ty) {
+        if !t.has_infer() {
+            return;
+        }
+
+        if let ty::Infer(InferTy::TyVar(vid)) = t.kind() {
+            // We shallow resolved the infer var before.
+            // So it should be a unresolved infer var with an universe.
+            self.max_universe = self.max_universe.max(self.infcx.universe_of_ty(vid).unwrap());
+        }
+
+        t.super_visit_with(self)
+    }
+
+    fn visit_const(&mut self, c: I::Const) {
+        if !c.has_infer() {
+            return;
+        }
+
+        if let ty::ConstKind::Infer(InferConst::Var(vid)) = c.kind() {
+            // We shallow resolved the infer var before.
+            // So it should be a unresolved infer var with an universe.
+            self.max_universe = self.max_universe.max(self.infcx.universe_of_ct(vid).unwrap());
+        }
+
+        c.super_visit_with(self)
+    }
+
+    fn visit_region(&mut self, r: I::Region) {
+        if let ty::ReVar(vid) = r.kind() {
+            self.max_universe = self.max_universe.max(self.infcx.universe_of_lt(vid).unwrap());
+        }
+    }
+}
+
 impl<'a, Infcx, I, F> NormalizationFolder<'a, Infcx, I, F>
 where
     Infcx: InferCtxtLike<Interner = I>,
@@ -54,12 +119,20 @@ where
         alias_term: I::Term,
         has_escaping: HasEscapingBoundVars,
     ) -> Result<I::Term, NoSolution> {
+        let current_universe = self.infcx.universe();
+        self.infcx.create_next_universe();
+
         let (normalized, ambig_goal) = (self.normalize)(alias_term)?;
 
         // Return ambiguous higher ranked alias as is if it contains escaping vars.
         // We can normalize it again after the binder is instantiated.
         if ambig_goal.is_some() && has_escaping == HasEscapingBoundVars::Yes {
-            return Ok(alias_term);
+            let mut visitor = MaxUniverse::new(self.infcx);
+            normalized.visit_with(&mut visitor);
+            let max_universe = visitor.max_universe();
+            if current_universe.cannot_name(max_universe) {
+                return Ok(alias_term);
+            }
         }
 
         self.stalled_goals.extend(ambig_goal);
