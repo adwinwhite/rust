@@ -736,7 +736,9 @@ where
             | ty::Placeholder(..)
             | ty::Infer(ty::IntVar(_) | ty::FloatVar(_))
             | ty::Error(_) => return,
-            ty::Infer(ty::FreshTy(_) | ty::FreshIntTy(_) | ty::FreshFloatTy(_)) | ty::Bound(..) => {
+            ty::Infer(ty::FreshTy(_) | ty::FreshIntTy(_) | ty::FreshFloatTy(_))
+            | ty::Bound(..)
+            | ty::Alias(AliasTy { kind: ty::Ambiguous { .. }, .. }) => {
                 panic!("unexpected self type for `{goal:?}`")
             }
 

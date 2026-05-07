@@ -45,7 +45,12 @@ impl<'tcx> Printer<'tcx> for TypeNamePrinter<'tcx> {
             | ty::UnsafeBinder(_) => self.pretty_print_type(ty),
 
             // Placeholders (all printed as `_` to uniformize them).
-            ty::Param(_) | ty::Bound(..) | ty::Placeholder(_) | ty::Infer(_) | ty::Error(_) => {
+            ty::Alias(ty::AliasTy { kind: ty::Ambiguous { .. }, .. })
+            | ty::Param(_)
+            | ty::Bound(..)
+            | ty::Placeholder(_)
+            | ty::Infer(_)
+            | ty::Error(_) => {
                 write!(self, "_")?;
                 Ok(())
             }

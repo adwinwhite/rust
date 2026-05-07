@@ -180,33 +180,6 @@ pub(crate) fn orphan_check_impl(
                 NonlocalImpl::DisallowOther,
             ),
 
-            ty::Alias(ty::AliasTy { kind, .. }) => {
-                let problematic_kind = match kind {
-                    // trait Id { type This: ?Sized; }
-                    // impl<T: ?Sized> Id for T {
-                    //     type This = T;
-                    // }
-                    // impl<T: ?Sized> AutoTrait for <T as Id>::This {}
-                    ty::Projection { .. } => "associated type",
-                    // type Foo = (impl Sized, bool)
-                    // impl AutoTrait for Foo {}
-                    ty::Free { .. } => "type alias",
-                    // type Opaque = impl Trait;
-                    // impl AutoTrait for Opaque {}
-                    ty::Opaque { .. } => "opaque type",
-                    // ```
-                    // struct S<T>(T);
-                    // impl<T: ?Sized> S<T> {
-                    //     type This = T;
-                    // }
-                    // impl<T: ?Sized> AutoTrait for S<T>::This {}
-                    // ```
-                    // FIXME(inherent_associated_types): The example code above currently leads to a cycle
-                    ty::Inherent { .. } => "associated type",
-                };
-                (LocalImpl::Disallow { problematic_kind }, NonlocalImpl::DisallowOther)
-            }
-
             ty::Bool
             | ty::Pat(..)
             | ty::Char
@@ -230,9 +203,38 @@ pub(crate) fn orphan_check_impl(
             | ty::CoroutineWitness(..)
             | ty::Bound(..)
             | ty::Placeholder(..)
-            | ty::Infer(..) => {
+            | ty::Infer(..)
+            | ty::Alias(ty::AliasTy { kind: ty::Ambiguous { .. }, .. }) => {
                 let sp = tcx.def_span(impl_def_id);
                 span_bug!(sp, "weird self type for autotrait impl")
+            }
+
+            ty::Alias(ty::AliasTy { kind, .. }) => {
+                let problematic_kind = match kind {
+                    // trait Id { type This: ?Sized; }
+                    // impl<T: ?Sized> Id for T {
+                    //     type This = T;
+                    // }
+                    // impl<T: ?Sized> AutoTrait for <T as Id>::This {}
+                    ty::Projection { .. } => "associated type",
+                    // type Foo = (impl Sized, bool)
+                    // impl AutoTrait for Foo {}
+                    ty::Free { .. } => "type alias",
+                    // type Opaque = impl Trait;
+                    // impl AutoTrait for Opaque {}
+                    ty::Opaque { .. } => "opaque type",
+                    // ```
+                    // struct S<T>(T);
+                    // impl<T: ?Sized> S<T> {
+                    //     type This = T;
+                    // }
+                    // impl<T: ?Sized> AutoTrait for S<T>::This {}
+                    // ```
+                    // FIXME(inherent_associated_types): The example code above currently leads to a cycle
+                    ty::Inherent { .. } => "associated type",
+                    ty::Ambiguous { .. } => unreachable!(),
+                };
+                (LocalImpl::Disallow { problematic_kind }, NonlocalImpl::DisallowOther)
             }
 
             ty::Error(..) => (LocalImpl::Allow, NonlocalImpl::Allow),

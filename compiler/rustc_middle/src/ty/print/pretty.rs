@@ -821,7 +821,12 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
             ty::Foreign(def_id) => self.print_def_path(def_id, &[])?,
             ty::Alias(
                 ref data @ ty::AliasTy {
-                    kind: ty::Projection { .. } | ty::Inherent { .. } | ty::Free { .. },
+                    kind:
+                        ty::Projection { .. }
+                        | ty::Inherent { .. }
+                        | ty::Free { .. }
+                        // FIXME: handle the case it's an opaque or just treat it like infer?
+                        | ty::Ambiguous { .. },
                     ..
                 },
             ) => data.print(self)?,

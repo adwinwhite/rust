@@ -835,7 +835,9 @@ impl<'a, 'tcx> ImproperCTypesVisitor<'a, 'tcx> {
             //  so they are currently ignored for the purposes of this lint.
             ty::Param(..)
             | ty::Alias(ty::AliasTy {
-                kind: ty::Projection { .. } | ty::Inherent { .. }, ..
+                // FIXME: reveal.
+                kind: ty::Projection { .. } | ty::Inherent { .. },
+                ..
             }) if state.can_expect_ty_params() => FfiSafe,
 
             ty::UnsafeBinder(_) => FfiUnsafe {
@@ -846,7 +848,8 @@ impl<'a, 'tcx> ImproperCTypesVisitor<'a, 'tcx> {
 
             ty::Param(..)
             | ty::Alias(ty::AliasTy {
-                kind: ty::Projection { .. } | ty::Inherent { .. } | ty::Free { .. },
+                kind:
+                    ty::Projection { .. } | ty::Inherent { .. } | ty::Free { .. } | ty::Ambiguous { .. },
                 ..
             })
             | ty::Infer(..)
