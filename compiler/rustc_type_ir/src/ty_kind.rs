@@ -62,6 +62,15 @@ pub enum AliasTyKind<I: Interner> {
     /// Currently only used if the type alias references opaque types.
     /// Can always be normalized away.
     Free { def_id: I::DefId },
+
+    /// A wrapper that indicates the alias needs to be re-normalized.
+    ///
+    /// It's specifc to ambiguous aliases that contain escaping bound vars.
+    /// This is an optimization for binder renormalization and is only used in the
+    /// next solver. See `NormalizationFolder`.
+    ///
+    /// The def_id and args are the same as the original alias.
+    Ambiguous { def_id: I::DefId },
 }
 
 impl<I: Interner> AliasTyKind<I> {
@@ -75,6 +84,7 @@ impl<I: Interner> AliasTyKind<I> {
             AliasTyKind::Inherent { .. } => "inherent associated type",
             AliasTyKind::Opaque { .. } => "opaque type",
             AliasTyKind::Free { .. } => "type alias",
+            AliasTyKind::Ambiguous { .. } => "ambiguous alias",
         }
     }
 
@@ -82,9 +92,19 @@ impl<I: Interner> AliasTyKind<I> {
         let (AliasTyKind::Projection { def_id }
         | AliasTyKind::Inherent { def_id }
         | AliasTyKind::Opaque { def_id }
-        | AliasTyKind::Free { def_id }) = self;
+        | AliasTyKind::Free { def_id }
+        | AliasTyKind::Ambiguous { def_id }) = self;
 
         def_id
+    }
+
+    // Convert `Ambiguous` into its original kind.
+    pub fn reveal_ambiguous(self, interner: I) -> Self {
+        if let AliasTyKind::Ambiguous { def_id } = self {
+            interner.alias_ty_kind_from_def_id(def_id)
+        } else {
+            self
+        }
     }
 }
 
