@@ -97,6 +97,12 @@ where
     }
 }
 
+#[derive(PartialEq, Eq)]
+enum NeedRenormalization {
+    Yes,
+    No,
+}
+
 impl<'a, Infcx, I, F> NormalizationFolder<'a, Infcx, I, F>
 where
     Infcx: InferCtxtLike<Interner = I>,
@@ -120,7 +126,7 @@ where
         &mut self,
         alias_term: I::Term,
         has_escaping: HasEscapingBoundVars,
-    ) -> Result<I::Term, NoSolution> {
+    ) -> Result<(I::Term, NeedRenormalization), NoSolution> {
         let current_universe = self.infcx.universe();
         self.infcx.create_next_universe();
 
@@ -139,12 +145,12 @@ where
             normalized.visit_with(&mut visitor);
             let max_universe = visitor.max_universe();
             if current_universe.cannot_name(max_universe) {
-                return Ok(alias_term);
+                return Ok((alias_term, NeedRenormalization::Yes));
             }
         }
 
         self.stalled_goals.extend(ambig_goal);
-        Ok(normalized)
+        Ok((normalized, NeedRenormalization::No))
     }
 }
 
@@ -180,27 +186,39 @@ where
         // With eager normalization, we should normalize the args of alias before
         // normalizing the alias itself.
         let ty = ty.try_super_fold_with(self)?;
-        let ty::Alias(..) = ty.kind() else { return Ok(ty) };
+        let ty::Alias(alias_ty) = ty.kind() else { return Ok(ty) };
 
         if ty.has_escaping_bound_vars() {
             let (ty, mapped_regions, mapped_types, mapped_consts) =
                 BoundVarReplacer::replace_bound_vars(infcx, &mut self.universes, ty);
-            let result = ensure_sufficient_stack(|| {
+            let (normalized_term, need_renormalization) = ensure_sufficient_stack(|| {
                 self.normalize_alias_term(ty.into(), HasEscapingBoundVars::Yes)
-            })?
-            .expect_ty();
-            Ok(PlaceholderReplacer::replace_placeholders(
+            })?;
+            let normalized_ty = PlaceholderReplacer::replace_placeholders(
                 infcx,
                 mapped_regions,
                 mapped_types,
                 mapped_consts,
                 &self.universes,
-                result,
-            ))
+                normalized_term.expect_ty(),
+            );
+            if need_renormalization == NeedRenormalization::Yes {
+                Ok(Ty::new_alias(
+                    self.cx(),
+                    ty::AliasTy::new_from_args(
+                        self.cx(),
+                        ty::AliasTyKind::Ambiguous { def_id: alias_ty.kind.def_id() },
+                        alias_ty.args,
+                    ),
+                ))
+            } else {
+                Ok(normalized_ty)
+            }
         } else {
             Ok(ensure_sufficient_stack(|| {
                 self.normalize_alias_term(ty.into(), HasEscapingBoundVars::No)
             })?
+            .0
             .expect_ty())
         }
     }
@@ -223,6 +241,7 @@ where
             let result = ensure_sufficient_stack(|| {
                 self.normalize_alias_term(ct.into(), HasEscapingBoundVars::Yes)
             })?
+            .0
             .expect_const();
             Ok(PlaceholderReplacer::replace_placeholders(
                 infcx,
@@ -236,6 +255,7 @@ where
             Ok(ensure_sufficient_stack(|| {
                 self.normalize_alias_term(ct.into(), HasEscapingBoundVars::No)
             })?
+            .0
             .expect_const())
         }
     }
