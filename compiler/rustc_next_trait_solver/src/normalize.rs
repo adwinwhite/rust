@@ -31,6 +31,12 @@ enum HasEscapingBoundVars {
     No,
 }
 
+#[derive(PartialEq, Eq)]
+pub enum NormalizationScope {
+    All,
+    AmbiguousAlias,
+}
+
 /// Finds the max universe present in infer vars.
 struct MaxUniverse<'a, Infcx, I>
 where

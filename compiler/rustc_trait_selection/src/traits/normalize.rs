@@ -15,6 +15,7 @@ use rustc_middle::ty::{
     self, AliasTerm, Term, Ty, TyCtxt, TypeFoldable, TypeFolder, TypeSuperFoldable, TypeVisitable,
     TypeVisitableExt, TypingMode, Unnormalized,
 };
+use rustc_next_trait_solver::normalize::NormalizationScope;
 use tracing::{debug, instrument};
 
 use super::{BoundVarReplacer, PlaceholderReplacer, SelectionContext, project};
@@ -33,7 +34,8 @@ impl<'tcx> At<'_, 'tcx> {
         value: Unnormalized<'tcx, T>,
     ) -> InferOk<'tcx, T> {
         if self.infcx.next_trait_solver() {
-            let Normalized { value, obligations } = crate::solve::normalize(*self, value);
+            let Normalized { value, obligations } =
+                crate::solve::normalize(*self, value, NormalizationScope::All);
             InferOk { value, obligations }
         } else {
             let value = value.skip_normalization();
