@@ -20,7 +20,7 @@ use rustc_hir_analysis::hir_ty_lowering::{
     GenericPathSegment, HirTyLowerer, IsMethodCall, RegionInferReason,
 };
 use rustc_infer::infer::canonical::{Canonical, OriginalQueryValues, QueryResponse};
-use rustc_infer::infer::{DefineOpaqueTypes, InferResult};
+use rustc_infer::infer::{BoundRegionConversionTime, DefineOpaqueTypes, InferResult};
 use rustc_lint::builtin::SELF_CONSTRUCTOR_FROM_OUTER_ITEM;
 use rustc_middle::ty::adjustment::{
     Adjust, Adjustment, AutoBorrow, AutoBorrowMutability, DerefAdjustKind,
@@ -430,6 +430,20 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         self.register_infer_ok_obligations(
             self.at(&self.misc(span), self.param_env).normalize(value),
         )
+    }
+
+    pub(crate) fn instantiate_binder_with_fresh_vars_and_normalize<T>(
+        &self,
+        span: Span,
+        lbrct: BoundRegionConversionTime,
+        value: ty::Binder<'tcx, T>,
+    ) -> T
+    where
+        T: TypeFoldable<TyCtxt<'tcx>> + Copy,
+    {
+        self.instantiate_binder_with_fresh_vars_and_normalize_with(span, lbrct, value, |u| {
+            self.normalize(span, u)
+        })
     }
 
     pub(crate) fn require_type_meets(
