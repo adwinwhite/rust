@@ -15,6 +15,7 @@ use rustc_middle::ty::{
     self, AliasTerm, Term, Ty, TyCtxt, TypeFoldable, TypeFolder, TypeSuperFoldable, TypeVisitable,
     TypeVisitableExt, TypingMode, Unnormalized,
 };
+use rustc_next_trait_solver::normalize::NormalizationScope;
 use tracing::{debug, instrument};
 
 use super::{BoundVarReplacer, PlaceholderReplacer, SelectionContext, project};
@@ -33,7 +34,31 @@ impl<'tcx> At<'_, 'tcx> {
         value: Unnormalized<'tcx, T>,
     ) -> InferOk<'tcx, T> {
         if self.infcx.next_trait_solver() {
-            let Normalized { value, obligations } = crate::solve::normalize(*self, value);
+            let Normalized { value, obligations } =
+                crate::solve::normalize(*self, value, NormalizationScope::All);
+            InferOk { value, obligations }
+        } else {
+            let value = value.skip_normalization();
+            let mut selcx = SelectionContext::new(self.infcx);
+            let Normalized { value, obligations } =
+                normalize_with_depth(&mut selcx, self.param_env, self.cause.clone(), 0, value);
+            InferOk { value, obligations }
+        }
+    }
+
+    /// Normalize aliases of `Ambiguous` kind in a value.
+    ///
+    /// We should use this after instantiating binders to improve perf.
+    /// For the old solver, it's the same as `normalize`.
+    //
+    // FIXME: how to share inner method on this extension trait?
+    fn normalize_ambiguous_only<T: TypeFoldable<TyCtxt<'tcx>>>(
+        &self,
+        value: Unnormalized<'tcx, T>,
+    ) -> InferOk<'tcx, T> {
+        if self.infcx.next_trait_solver() {
+            let Normalized { value, obligations } =
+                crate::solve::normalize(*self, value, NormalizationScope::AmbiguousAlias);
             InferOk { value, obligations }
         } else {
             let value = value.skip_normalization();
