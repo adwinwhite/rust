@@ -46,6 +46,24 @@ impl<'tcx> At<'_, 'tcx> {
         }
     }
 
+    // FIXME: how to share inner method on this extension trait?
+    fn normalize_ambiguous_only<T: TypeFoldable<TyCtxt<'tcx>>>(
+        &self,
+        value: Unnormalized<'tcx, T>,
+    ) -> InferOk<'tcx, T> {
+        if self.infcx.next_trait_solver() {
+            let Normalized { value, obligations } =
+                crate::solve::normalize(*self, value, NormalizationScope::AmbiguousAlias);
+            InferOk { value, obligations }
+        } else {
+            let value = value.skip_normalization();
+            let mut selcx = SelectionContext::new(self.infcx);
+            let Normalized { value, obligations } =
+                normalize_with_depth(&mut selcx, self.param_env, self.cause.clone(), 0, value);
+            InferOk { value, obligations }
+        }
+    }
+
     /// Deeply normalizes `value`, replacing all aliases which can by normalized in
     /// the current environment. In the new solver this errors in case normalization
     /// fails or is ambiguous.

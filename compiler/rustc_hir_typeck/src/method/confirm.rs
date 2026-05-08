@@ -792,7 +792,7 @@ impl<'a, 'tcx> ConfirmContext<'a, 'tcx> {
     where
         T: TypeFoldable<TyCtxt<'tcx>> + Copy,
     {
-        self.fcx.instantiate_binder_with_fresh_vars(
+        self.fcx.instantiate_binder_with_fresh_vars_and_normalize(
             self.span,
             BoundRegionConversionTime::FnCall,
             value,

@@ -227,7 +227,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             ty::Closure(def_id, args) if self.closure_kind(adjusted_ty).is_none() => {
                 let def_id = def_id.expect_local();
                 let closure_sig = args.as_closure().sig();
-                let closure_sig = self.instantiate_binder_with_fresh_vars(
+                // FIXME: should we normalize this under fcx's fulfillment context?
+                let closure_sig = self.instantiate_binder_with_fresh_vars_and_normalize(
                     call_expr.span,
                     BoundRegionConversionTime::FnCall,
                     closure_sig,
@@ -254,7 +255,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             ty::CoroutineClosure(def_id, args) if self.closure_kind(adjusted_ty).is_none() => {
                 let def_id = def_id.expect_local();
                 let closure_args = args.as_coroutine_closure();
-                let coroutine_closure_sig = self.instantiate_binder_with_fresh_vars(
+                // FIXME: should we normalize this under fcx's fulfillment context?
+                let coroutine_closure_sig = self.instantiate_binder_with_fresh_vars_and_normalize(
                     call_expr.span,
                     BoundRegionConversionTime::FnCall,
                     closure_args.coroutine_closure_sig(),
@@ -579,7 +581,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // renormalize the associated types at this point, since they
         // previously appeared within a `Binder<>` and hence would not
         // have been normalized before.
-        let fn_sig = self.instantiate_binder_with_fresh_vars(
+        let fn_sig = self.instantiate_binder_with_fresh_vars_and_normalize(
             call_expr.span,
             BoundRegionConversionTime::FnCall,
             fn_sig,

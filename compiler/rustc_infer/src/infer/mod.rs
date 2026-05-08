@@ -1298,18 +1298,19 @@ impl<'tcx> InferCtxt<'tcx> {
         }
     }
 
-    pub fn instantiate_binder_with_fresh_vars_and_normalize_with<T>(
+    pub fn instantiate_binder_with_fresh_vars_and_normalize_with<T, F>(
         &self,
         span: Span,
         lbrct: BoundRegionConversionTime,
         value: ty::Binder<'tcx, T>,
-        normalize: FnMut(Unnormalized<'tcx, T>) -> T,
+        mut normalize: F,
     ) -> T
     where
         T: TypeFoldable<TyCtxt<'tcx>> + Copy,
+        F: FnMut(ty::Unnormalized<'tcx, T>) -> T,
     {
         let instantiated = self.instantiate_binder_with_fresh_vars(span, lbrct, value);
-        normalize(Unnormalized::new(instantiated))
+        normalize(ty::Unnormalized::new(instantiated))
     }
 
     // Instantiates the bound variables in a given binder with fresh inference
@@ -1319,6 +1320,9 @@ impl<'tcx> InferCtxt<'tcx> {
     // variables (e.g. during a method call). If there isn't a [`BoundRegionConversionTime`]
     // that corresponds to your use case, consider whether or not you should
     // use [`InferCtxt::enter_forall`] instead.
+    //
+    // FIXME: rename this to something like `instantiate_binder_with_fresh_vars_unnormalized`?
+    // Or add a wrapper that contains assertion that we don't need to re-normalize.
     pub fn instantiate_binder_with_fresh_vars<T>(
         &self,
         span: Span,
