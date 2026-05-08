@@ -1073,10 +1073,12 @@ where
     }
 
     pub(super) fn instantiate_binder_with_infer<T: TypeFoldable<I> + Copy>(
-        &self,
+        &mut self,
+        param_env: I::ParamEnv,
         value: ty::Binder<I, T>,
-    ) -> T {
-        self.delegate.instantiate_binder_with_infer(value)
+    ) -> Result<T, NoSolution> {
+        let instantiated = self.delegate.instantiate_binder_with_infer(value);
+        self.normalize_ambiguous_only(param_env, instantiated)
     }
 
     /// `enter_forall`, but takes `&mut self` and passes it back through the
