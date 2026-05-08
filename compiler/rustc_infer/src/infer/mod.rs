@@ -1298,6 +1298,20 @@ impl<'tcx> InferCtxt<'tcx> {
         }
     }
 
+    pub fn instantiate_binder_with_fresh_vars_and_normalize_with<T>(
+        &self,
+        span: Span,
+        lbrct: BoundRegionConversionTime,
+        value: ty::Binder<'tcx, T>,
+        normalize: FnMut(Unnormalized<'tcx, T>) -> T,
+    ) -> T
+    where
+        T: TypeFoldable<TyCtxt<'tcx>> + Copy,
+    {
+        let instantiated = self.instantiate_binder_with_fresh_vars(span, lbrct, value);
+        normalize(Unnormalized::new(instantiated))
+    }
+
     // Instantiates the bound variables in a given binder with fresh inference
     // variables in the current universe.
     //

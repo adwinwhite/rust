@@ -432,6 +432,20 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         )
     }
 
+    pub(crate) fn instantiate_binder_with_fresh_vars_and_normalize<T>(
+        &self,
+        span: Span,
+        lbrct: BoundRegionConversionTime,
+        value: ty::Binder<'tcx, T>,
+    ) -> T
+    where
+        T: TypeFoldable<TyCtxt<'tcx>> + Copy,
+    {
+        self.instantiate_binder_with_fresh_vars_and_normalize_with(span, lbrct, value, |u| {
+            self.normalize(span, u)
+        })
+    }
+
     pub(crate) fn require_type_meets(
         &self,
         ty: Ty<'tcx>,
