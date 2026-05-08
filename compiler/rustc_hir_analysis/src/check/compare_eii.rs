@@ -72,6 +72,7 @@ pub(crate) fn compare_eii_function_types<'tcx>(
     let declaration_sig = tcx.liberate_late_bound_regions(external_impl.into(), declaration_sig);
     debug!(?declaration_sig);
 
+    // We need to check wf of the unnormalized sig.
     let unnormalized_external_impl_sig = infcx.instantiate_binder_with_fresh_vars(
         external_impl_span,
         infer::BoundRegionConversionTime::HigherRankedType,
@@ -82,11 +83,9 @@ pub(crate) fn compare_eii_function_types<'tcx>(
             )
             .skip_norm_wip(),
     );
-    let external_impl_sig = ocx.normalize(
-        &norm_cause,
-        param_env,
-        Unnormalized::new_wip(unnormalized_external_impl_sig),
-    );
+    let external_impl_sig =
+        ocx.normalize(&norm_cause, param_env, Unnormalized::new(unnormalized_external_impl_sig));
+
     debug!(?external_impl_sig);
 
     // Next, add all inputs and output as well-formed tys. Importantly,

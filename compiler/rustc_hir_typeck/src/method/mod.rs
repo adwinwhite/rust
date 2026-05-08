@@ -15,7 +15,7 @@ use rustc_infer::infer::{BoundRegionConversionTime, InferOk};
 use rustc_infer::traits::PredicateObligations;
 use rustc_middle::traits::ObligationCause;
 use rustc_middle::ty::{
-    self, GenericArgs, GenericArgsRef, GenericParamDefKind, Ty, TypeVisitableExt, Unnormalized,
+    self, GenericArgs, GenericArgsRef, GenericParamDefKind, Ty, TypeVisitableExt,
 };
 use rustc_middle::{bug, span_bug};
 use rustc_span::{ErrorGuaranteed, Ident, Span, Symbol};
@@ -422,15 +422,17 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // function signature so that normalization does not need to deal
         // with bound regions.
         let fn_sig = tcx.fn_sig(def_id).instantiate(self.tcx, args).skip_norm_wip();
-        let fn_sig = self.instantiate_binder_with_fresh_vars(
+        let fn_sig = self.instantiate_binder_with_fresh_vars_and_normalize_with(
             obligation.cause.span,
             BoundRegionConversionTime::FnCall,
             fn_sig,
+            |value| {
+                let InferOk { value: fn_sig, obligations: o } =
+                    self.at(&obligation.cause, self.param_env).normalize(value);
+                obligations.extend(o);
+                fn_sig
+            },
         );
-
-        let InferOk { value: fn_sig, obligations: o } =
-            self.at(&obligation.cause, self.param_env).normalize(Unnormalized::new_wip(fn_sig));
-        obligations.extend(o);
 
         // Register obligations for the parameters. This will include the
         // `Self` parameter, which in turn has a bound of the main trait,

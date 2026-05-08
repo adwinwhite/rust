@@ -2035,13 +2035,12 @@ impl<'a, 'tcx> ProbeContext<'a, 'tcx> {
                         }
                     }
 
-                    let trait_ref = self.instantiate_binder_with_fresh_vars(
+                    let trait_ref = self.instantiate_binder_with_fresh_vars_and_normalize_with(
                         self.span,
                         BoundRegionConversionTime::FnCall,
                         poly_trait_ref,
+                        |value| ocx.normalize(cause, self.param_env, value),
                     );
-                    let trait_ref =
-                        ocx.normalize(cause, self.param_env, Unnormalized::new_wip(trait_ref));
                     (xform_self_ty, xform_ret_ty) =
                         self.xform_self_ty(probe.item, trait_ref.self_ty(), trait_ref.args);
                     xform_self_ty =
@@ -2100,6 +2099,9 @@ impl<'a, 'tcx> ProbeContext<'a, 'tcx> {
                     trait_predicate = Some(trait_ref.upcast(self.tcx));
                 }
                 ObjectCandidate(poly_trait_ref) | WhereClauseCandidate(poly_trait_ref) => {
+                    // If we normalize the whole trait ref, this candidate can fail.
+                    // Unsure if that's desirable. See
+                    // `tests/ui/traits/trait-upcasting/mono-impossible.rs`.
                     let trait_ref = self.instantiate_binder_with_fresh_vars(
                         self.span,
                         BoundRegionConversionTime::FnCall,
