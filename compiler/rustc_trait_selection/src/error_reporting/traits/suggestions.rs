@@ -1346,7 +1346,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
         trait_pred: ty::PolyTraitPredicate<'tcx>,
     ) -> bool {
         let self_ty = self.resolve_vars_if_possible(trait_pred.self_ty());
-        self.enter_forall(self_ty, |ty: Ty<'_>| {
+        self.enter_forall_skipping_norm(self_ty, |ty: Ty<'_>| {
             let Some(generics) = self.tcx.hir_get_generics(obligation.cause.body_id) else {
                 return false;
             };
@@ -4854,7 +4854,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                     && let Some(failed_pred) = failed_pred.as_trait_clause()
                     && where_pred.def_id() == failed_pred.def_id()
                 {
-                    self.enter_forall(where_pred, |where_pred| {
+                    self.enter_forall_skipping_norm(where_pred, |where_pred| {
                         let failed_pred = self.instantiate_binder_with_fresh_vars(
                             expr.span,
                             BoundRegionConversionTime::FnCall,
@@ -5597,7 +5597,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
         {
             self.probe(|_| {
                 let ocx = ObligationCtxt::new(self);
-                self.enter_forall(pred, |pred| {
+                self.enter_forall_skipping_norm(pred, |pred| {
                     let pred = ocx.normalize(
                         &ObligationCause::dummy(),
                         param_env,
@@ -6070,13 +6070,17 @@ fn hint_missing_borrow<'tcx>(
     }
 
     let found_args = match found.kind() {
-        ty::FnPtr(sig_tys, _) => infcx.enter_forall(*sig_tys, |sig_tys| sig_tys.inputs().iter()),
+        ty::FnPtr(sig_tys, _) => {
+            infcx.enter_forall_skipping_norm(*sig_tys, |sig_tys| sig_tys.inputs().iter())
+        }
         kind => {
             span_bug!(span, "found was converted to a FnPtr above but is now {:?}", kind)
         }
     };
     let expected_args = match expected.kind() {
-        ty::FnPtr(sig_tys, _) => infcx.enter_forall(*sig_tys, |sig_tys| sig_tys.inputs().iter()),
+        ty::FnPtr(sig_tys, _) => {
+            infcx.enter_forall_skipping_norm(*sig_tys, |sig_tys| sig_tys.inputs().iter())
+        }
         kind => {
             span_bug!(span, "expected was converted to a FnPtr above but is now {:?}", kind)
         }

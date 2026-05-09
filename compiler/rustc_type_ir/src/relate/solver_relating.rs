@@ -312,12 +312,16 @@ where
             // [rd]: https://rustc-dev-guide.rust-lang.org/borrow_check/region_inference/placeholders_and_universes.html
             ty::Covariant => {
                 self.infcx.enter_forall(b, |b| {
+                    // FIXME: eager normalization in side relating? or just emit a normalization
+                    // goal?
+                    let b = b.skip_norm_wip();
                     let a = self.infcx.instantiate_binder_with_infer(a).skip_norm_wip();
                     self.relate(a, b)
                 })?;
             }
             ty::Contravariant => {
                 self.infcx.enter_forall(a, |a| {
+                    let a = a.skip_norm_wip();
                     let b = self.infcx.instantiate_binder_with_infer(b).skip_norm_wip();
                     self.relate(a, b)
                 })?;
@@ -335,12 +339,14 @@ where
             // Check if `exists<..> A == for<..> B`
             ty::Invariant => {
                 self.infcx.enter_forall(b, |b| {
+                    let b = b.skip_norm_wip();
                     let a = self.infcx.instantiate_binder_with_infer(a).skip_norm_wip();
                     self.relate(a, b)
                 })?;
 
                 // Check if `exists<..> B == for<..> A`.
                 self.infcx.enter_forall(a, |a| {
+                    let a = a.skip_norm_wip();
                     let b = self.infcx.instantiate_binder_with_infer(b).skip_norm_wip();
                     self.relate(a, b)
                 })?;

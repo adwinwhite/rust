@@ -772,13 +772,16 @@ impl<'tcx> InferCtxt<'tcx> {
             _ => {}
         }
 
-        self.enter_forall(predicate, |ty::SubtypePredicate { a_is_expected, a, b }| {
-            if a_is_expected {
-                Ok(self.at(cause, param_env).sub(DefineOpaqueTypes::Yes, a, b))
-            } else {
-                Ok(self.at(cause, param_env).sup(DefineOpaqueTypes::Yes, b, a))
-            }
-        })
+        self.enter_forall_skipping_norm(
+            predicate,
+            |ty::SubtypePredicate { a_is_expected, a, b }| {
+                if a_is_expected {
+                    Ok(self.at(cause, param_env).sub(DefineOpaqueTypes::Yes, a, b))
+                } else {
+                    Ok(self.at(cause, param_env).sup(DefineOpaqueTypes::Yes, b, a))
+                }
+            },
+        )
     }
 
     /// Number of type variables created so far.
