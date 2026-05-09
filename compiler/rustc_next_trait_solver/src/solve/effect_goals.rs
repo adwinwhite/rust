@@ -260,7 +260,7 @@ where
             structural_traits::instantiate_constituent_tys_for_copy_clone_trait(ecx, self_ty)?;
 
         ecx.probe_builtin_trait_candidate(BuiltinImplSource::Misc).enter(|ecx| {
-            ecx.enter_forall(constituent_tys, |ecx, tys| {
+            ecx.enter_forall(goal.param_env, constituent_tys, |ecx, tys| {
                 ecx.add_goals(
                     GoalSource::ImplWhereBound,
                     tys.into_iter().map(|ty| {
@@ -272,7 +272,8 @@ where
                         )
                     }),
                 );
-            });
+                Ok(())
+            })?;
 
             ecx.evaluate_added_goals_and_make_canonical_response(Certainty::Yes)
         })

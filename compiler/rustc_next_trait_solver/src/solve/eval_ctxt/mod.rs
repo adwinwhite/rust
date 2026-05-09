@@ -1332,10 +1332,14 @@ where
     /// callback since it can't be aliased during the call.
     pub(super) fn enter_forall<T: TypeFoldable<I>, U>(
         &mut self,
+        param_env: I::ParamEnv,
         value: ty::Binder<I, T>,
-        f: impl FnOnce(&mut Self, T) -> U,
-    ) -> U {
-        self.delegate.enter_forall(value, |value| f(self, value))
+        f: impl FnOnce(&mut Self, T) -> Result<U, NoSolution>,
+    ) -> Result<U, NoSolution> {
+        self.delegate.enter_forall(value, |value| {
+            let value = self.normalize_ambiguous_only(param_env, value)?;
+            f(self, value)
+        })
     }
 
     pub(super) fn resolve_vars_if_possible<T>(&self, value: T) -> T

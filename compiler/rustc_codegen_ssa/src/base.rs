@@ -126,7 +126,7 @@ pub fn validate_trivial_unsize<'tcx>(
                 tcx.infer_ctxt().build_with_typing_env(ty::TypingEnv::fully_monomorphized());
             let universe = infcx.universe();
             let ocx = ObligationCtxt::new(&infcx);
-            infcx.enter_forall(hr_target_principal, |target_principal| {
+            infcx.enter_forall_skipping_norm(hr_target_principal, |target_principal| {
                 let source_principal = infcx.instantiate_binder_with_fresh_vars_skipping_norm(
                     DUMMY_SP,
                     BoundRegionConversionTime::HigherRankedType,
