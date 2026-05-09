@@ -588,7 +588,7 @@ where
     pub(super) fn compute_goal(&mut self, goal: Goal<I, I::Predicate>) -> QueryResult<I> {
         let Goal { param_env, predicate } = goal;
         let kind = predicate.kind();
-        self.enter_forall(kind, |ecx, kind| match kind {
+        self.enter_forall(param_env, kind, |ecx, kind| match kind {
             ty::PredicateKind::Clause(ty::ClauseKind::Trait(predicate)) => {
                 ecx.compute_trait_goal(Goal { param_env, predicate }).map(|(r, _via)| r)
             }
@@ -1085,10 +1085,14 @@ where
     /// callback since it can't be aliased during the call.
     pub(super) fn enter_forall<T: TypeFoldable<I>, U>(
         &mut self,
+        param_env: I::ParamEnv,
         value: ty::Binder<I, T>,
-        f: impl FnOnce(&mut Self, T) -> U,
-    ) -> U {
-        self.delegate.enter_forall(value, |value| f(self, value))
+        f: impl FnOnce(&mut Self, T) -> Result<U, NoSolution>,
+    ) -> Result<U, NoSolution> {
+        self.delegate.enter_forall(value, |value| {
+            let value = self.normalize_ambiguous_only(param_env, value)?;
+            f(self, value)
+        })
     }
 
     pub(super) fn resolve_vars_if_possible<T>(&self, value: T) -> T

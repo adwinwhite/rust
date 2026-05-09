@@ -299,7 +299,7 @@ impl<'tcx> TypeRelation<TyCtxt<'tcx>> for TypeRelating<'_, 'tcx> {
                 //
                 // [rd]: https://rustc-dev-guide.rust-lang.org/borrow_check/region_inference/placeholders_and_universes.html
                 ty::Covariant => {
-                    infcx.enter_forall(b, |b| {
+                    infcx.enter_forall_skipping_norm(b, |b| {
                         let a = infcx.instantiate_binder_with_fresh_vars_skipping_norm(
                             span,
                             HigherRankedType,
@@ -309,7 +309,7 @@ impl<'tcx> TypeRelation<TyCtxt<'tcx>> for TypeRelating<'_, 'tcx> {
                     })?;
                 }
                 ty::Contravariant => {
-                    infcx.enter_forall(a, |a| {
+                    infcx.enter_forall_skipping_norm(a, |a| {
                         let b = infcx.instantiate_binder_with_fresh_vars_skipping_norm(
                             span,
                             HigherRankedType,
@@ -330,7 +330,7 @@ impl<'tcx> TypeRelation<TyCtxt<'tcx>> for TypeRelating<'_, 'tcx> {
                 // `exists<..> A == for<..> B` and `exists<..> B == for<..> A`.
                 // Check if `exists<..> A == for<..> B`
                 ty::Invariant => {
-                    infcx.enter_forall(b, |b| {
+                    infcx.enter_forall_skipping_norm(b, |b| {
                         let a = infcx.instantiate_binder_with_fresh_vars_skipping_norm(
                             span,
                             HigherRankedType,
@@ -340,7 +340,7 @@ impl<'tcx> TypeRelation<TyCtxt<'tcx>> for TypeRelating<'_, 'tcx> {
                     })?;
 
                     // Check if `exists<..> B == for<..> A`.
-                    infcx.enter_forall(a, |a| {
+                    infcx.enter_forall_skipping_norm(a, |a| {
                         let b = infcx.instantiate_binder_with_fresh_vars_skipping_norm(
                             span,
                             HigherRankedType,

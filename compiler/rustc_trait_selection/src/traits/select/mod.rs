@@ -619,7 +619,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                 }
 
                 ty::PredicateKind::Clause(ty::ClauseKind::HostEffect(data)) => {
-                    self.infcx.enter_forall(bound_predicate.rebind(data), |data| {
+                    self.infcx.enter_forall_skipping_norm(bound_predicate.rebind(data), |data| {
                         match effects::evaluate_host_effect_obligation(
                             self,
                             &obligation.with(self.tcx(), data),
@@ -2617,7 +2617,7 @@ impl<'tcx> SelectionContext<'_, 'tcx> {
 
                     nested.extend(
                         self.infcx
-                            .enter_forall(hr_target_principal, |target_principal| {
+                            .enter_forall_skipping_norm(hr_target_principal, |target_principal| {
                                 let source_principal =
                                     self.infcx.instantiate_binder_with_fresh_vars_skipping_norm(
                                         obligation.cause.span,
@@ -2654,7 +2654,7 @@ impl<'tcx> SelectionContext<'_, 'tcx> {
                             hr_source_projection.item_def_id() == hr_target_projection.item_def_id()
                                 && self.infcx.probe(|_| {
                                     self.infcx
-                                        .enter_forall(hr_target_projection, |target_projection| {
+                                        .enter_forall_skipping_norm(
                                             hr_target_projection,
                                             |target_projection| {
                                                 let source_projection =
@@ -2685,7 +2685,7 @@ impl<'tcx> SelectionContext<'_, 'tcx> {
                     }
                     nested.extend(
                         self.infcx
-                            .enter_forall(hr_target_projection, |target_projection| {
+                            .enter_forall_skipping_norm(hr_target_projection, |target_projection| {
                                 let source_projection =
                                     self.infcx.instantiate_binder_with_fresh_vars_skipping_norm(
                                         obligation.cause.span,
