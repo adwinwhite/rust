@@ -36,16 +36,26 @@ where
         let cx = self.cx();
         let Goal { param_env, predicate: (lhs, rhs, direction) } = goal;
 
+        let variance = match direction {
+            ty::AliasRelationDirection::Equate => ty::Invariant,
+            ty::AliasRelationDirection::Subtype => ty::Covariant,
+        };
+
         // Check that the alias-relate goal is reasonable. Writeback for
         // `coroutine_stalled_predicates` can replace alias terms with
         // `{type error}` if the alias still contains infer vars, so we also
         // accept alias-relate goals where one of the terms is an error.
-        debug_assert!(
-            lhs.to_alias_term(self.cx()).is_some()
-                || rhs.to_alias_term(self.cx()).is_some()
-                || lhs.is_error()
-                || rhs.is_error()
-        );
+        //
+        // Now that we perform eager normalization inside the solver in some places,
+        // The aliases might be normalized away.
+        if !(lhs.to_alias_term(self.cx()).is_some()
+            || rhs.to_alias_term(self.cx()).is_some()
+            || lhs.is_error()
+            || rhs.is_error())
+        {
+            self.relate(param_env, lhs, variance, rhs)?;
+            return self.evaluate_added_goals_and_make_canonical_response(Certainty::Yes);
+        }
 
         // Structurally normalize the lhs.
         let lhs = if let Some(alias) = lhs.to_alias_term(self.cx()) {
@@ -83,10 +93,6 @@ where
         let rhs = self.resolve_vars_if_possible(rhs);
         trace!(?lhs, ?rhs);
 
-        let variance = match direction {
-            ty::AliasRelationDirection::Equate => ty::Invariant,
-            ty::AliasRelationDirection::Subtype => ty::Covariant,
-        };
         match (lhs.to_alias_term(self.cx()), rhs.to_alias_term(self.cx())) {
             (None, None) => {
                 self.relate(param_env, lhs, variance, rhs)?;
