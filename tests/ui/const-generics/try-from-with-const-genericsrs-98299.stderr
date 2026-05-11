@@ -40,7 +40,7 @@ error[E0284]: type annotations needed for `SmallCString<_>`
   --> $DIR/try-from-with-const-genericsrs-98299.rs:5:36
    |
 LL |     SmallCString::try_from(p).map(|cstr| cstr);
-   |     -------------------------      ^^^^
+   |     ----------------------         ^^^^
    |     |
    |     type must be known at this point
    |

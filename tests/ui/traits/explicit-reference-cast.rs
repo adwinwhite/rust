@@ -22,11 +22,9 @@ impl From<&str> for ToolA {
 
 pub struct ToolB(PathBuf);
 //~^ HELP the trait `From<&PathBuf>` is not implemented for `ToolB`
-//~| HELP the trait `From<&PathBuf>` is not implemented for `ToolB`
 
 impl TryFrom<&Path> for ToolB {
     //~^ HELP the trait `TryFrom<&PathBuf>` is not implemented for `ToolB`
-    //~| HELP the trait `TryFrom<&PathBuf>` is not implemented for `ToolB`
     type Error = ();
 
     fn try_from(p: &Path) -> Result<ToolB, ()> {
@@ -42,9 +40,6 @@ fn main() {
     //~| HELP consider casting the `&PathBuf` value to `&Path`
     let _ = ToolB::try_from(&path);
     //~^ ERROR the trait bound `ToolB: TryFrom<&PathBuf>` is not satisfied
-    //~| ERROR the trait bound `ToolB: From<&PathBuf>` is not satisfied
     //~| HELP consider casting the `&PathBuf` value to `&Path`
-    //~| HELP consider casting the `&PathBuf` value to `&Path`
-    //~| HELP for that trait implementation, expected `Path`, found `PathBuf`
     //~| HELP for that trait implementation, expected `Path`, found `PathBuf`
 }
