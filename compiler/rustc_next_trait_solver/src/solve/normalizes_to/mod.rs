@@ -92,6 +92,7 @@ where
                 self.normalize_free_alias(goal)
             }
             ty::AliasTermKind::UnevaluatedConst { .. } => self.normalize_anon_const(goal),
+            ty::AliasTermKind::AmbiguousTy { .. } => unreachable!(),
         }
     }
 
