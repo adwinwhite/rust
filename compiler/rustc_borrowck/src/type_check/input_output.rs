@@ -48,7 +48,7 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
         // Then replace the bound items in the fn sig with fresh variables,
         // so that they represent the view from "inside" the closure.
         let user_provided_sig = self.instantiate_canonical(self.body.span, &user_provided_poly_sig);
-        let mut user_provided_sig = self.infcx.instantiate_binder_with_fresh_vars(
+        let mut user_provided_sig = self.infcx.instantiate_binder_with_fresh_vars_skipping_norm(
             self.body.span,
             BoundRegionConversionTime::FnCall,
             user_provided_sig,

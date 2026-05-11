@@ -105,7 +105,7 @@ pub fn compute_applicable_impls_for_diagnostics<'tcx>(
                 Unnormalized::new_wip(placeholder_obligation.trait_ref),
             );
 
-            let param_env_predicate = infcx.instantiate_binder_with_fresh_vars(
+            let param_env_predicate = infcx.instantiate_binder_with_fresh_vars_skipping_norm(
                 DUMMY_SP,
                 BoundRegionConversionTime::HigherRankedType,
                 poly_trait_predicate,

@@ -1075,7 +1075,7 @@ impl<'a, 'tcx> ProbeContext<'a, 'tcx> {
                 let args = self.fresh_args_for_item(self.span, method.def_id);
                 let fty =
                     self.tcx.fn_sig(method.def_id).instantiate(self.tcx, args).skip_norm_wip();
-                let fty = self.instantiate_binder_with_fresh_vars(
+                let fty = self.instantiate_binder_with_fresh_vars_skipping_norm(
                     self.span,
                     BoundRegionConversionTime::FnCall,
                     fty,
@@ -1901,7 +1901,7 @@ impl<'a, 'tcx> ProbeContext<'a, 'tcx> {
                 CandidateSource::Trait(candidate.item.container_id(self.tcx))
             }
             TraitCandidate(trait_ref, _) => self.probe(|_| {
-                let trait_ref = self.instantiate_binder_with_fresh_vars(
+                let trait_ref = self.instantiate_binder_with_fresh_vars_skipping_norm(
                     self.span,
                     BoundRegionConversionTime::FnCall,
                     trait_ref,
@@ -2102,7 +2102,7 @@ impl<'a, 'tcx> ProbeContext<'a, 'tcx> {
                     // If we normalize the whole trait ref, this candidate can fail.
                     // Unsure if that's desirable. See
                     // `tests/ui/traits/trait-upcasting/mono-impossible.rs`.
-                    let trait_ref = self.instantiate_binder_with_fresh_vars(
+                    let trait_ref = self.instantiate_binder_with_fresh_vars_skipping_norm(
                         self.span,
                         BoundRegionConversionTime::FnCall,
                         poly_trait_ref,

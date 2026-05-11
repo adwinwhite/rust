@@ -12,7 +12,7 @@ use rustc_infer::traits::{Obligation, ObligationCause, ObligationCauseCode};
 use rustc_middle::ty::adjustment::{
     Adjust, Adjustment, AllowTwoPhase, AutoBorrow, AutoBorrowMutability,
 };
-use rustc_middle::ty::{self, GenericArgsRef, Ty, TyCtxt, TypeVisitableExt, Unnormalized};
+use rustc_middle::ty::{self, GenericArgsRef, Ty, TyCtxt, TypeVisitableExt};
 use rustc_middle::{bug, span_bug};
 use rustc_span::def_id::LocalDefId;
 use rustc_span::{Span, sym};

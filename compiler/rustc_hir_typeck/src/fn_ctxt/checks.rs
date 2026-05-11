@@ -3034,7 +3034,7 @@ impl<'a, 'tcx> ArgsCtxt<'a, 'tcx> {
                 .instantiate(self.call_ctxt.fn_ctxt.tcx, args)
                 .skip_norm_wip();
 
-            self.call_ctxt.fn_ctxt.instantiate_binder_with_fresh_vars(
+            self.call_ctxt.fn_ctxt.instantiate_binder_with_fresh_vars_skipping_norm(
                 call_name.span,
                 BoundRegionConversionTime::FnCall,
                 fn_sig,

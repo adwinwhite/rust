@@ -1715,7 +1715,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
             return Err(());
         }
 
-        let trait_bound = self.infcx.instantiate_binder_with_fresh_vars(
+        let trait_bound = self.infcx.instantiate_binder_with_fresh_vars_skipping_norm(
             obligation.cause.span,
             HigherRankedType,
             trait_bound,
@@ -1772,7 +1772,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
         debug_assert_eq!(obligation.predicate.def_id(), env_predicate.item_def_id());
 
         let mut nested_obligations = PredicateObligations::new();
-        let infer_predicate = self.infcx.instantiate_binder_with_fresh_vars(
+        let infer_predicate = self.infcx.instantiate_binder_with_fresh_vars_skipping_norm(
             obligation.cause.span,
             BoundRegionConversionTime::HigherRankedType,
             env_predicate,
@@ -2619,7 +2619,7 @@ impl<'tcx> SelectionContext<'_, 'tcx> {
                         self.infcx
                             .enter_forall(hr_target_principal, |target_principal| {
                                 let source_principal =
-                                    self.infcx.instantiate_binder_with_fresh_vars(
+                                    self.infcx.instantiate_binder_with_fresh_vars_skipping_norm(
                                         obligation.cause.span,
                                         HigherRankedType,
                                         hr_source_principal,
@@ -2655,25 +2655,24 @@ impl<'tcx> SelectionContext<'_, 'tcx> {
                                 && self.infcx.probe(|_| {
                                     self.infcx
                                         .enter_forall(hr_target_projection, |target_projection| {
-                                            let source_projection =
-                                                self.infcx.instantiate_binder_with_fresh_vars(
-                                                    obligation.cause.span,
-                                                    HigherRankedType,
-                                                    hr_source_projection,
-                                                );
-                                            self.infcx
-                                                .at(&obligation.cause, obligation.param_env)
-                                                .eq_trace(
-                                                    DefineOpaqueTypes::Yes,
-                                                    ToTrace::to_trace(
-                                                        &obligation.cause,
-                                                        hr_target_projection,
-                                                        hr_source_projection,
-                                                    ),
-                                                    target_projection,
-                                                    source_projection,
-                                                )
-                                        })
+                                            hr_target_projection,
+                                            |target_projection| {
+                                                let source_projection =
+                                                    self.infcx.instantiate_binder_with_fresh_vars_skipping_norm(obligation.cause.span, HigherRankedType, hr_source_projection);
+                                                self.infcx
+                                                    .at(&obligation.cause, obligation.param_env)
+                                                    .eq_trace(
+                                                        DefineOpaqueTypes::Yes,
+                                                        ToTrace::to_trace(
+                                                            &obligation.cause,
+                                                            hr_target_projection,
+                                                            hr_source_projection,
+                                                        ),
+                                                        target_projection,
+                                                        source_projection,
+                                                    )
+                                            },
+                                        )
                                         .is_ok()
                                 })
                         });
@@ -2688,7 +2687,7 @@ impl<'tcx> SelectionContext<'_, 'tcx> {
                         self.infcx
                             .enter_forall(hr_target_projection, |target_projection| {
                                 let source_projection =
-                                    self.infcx.instantiate_binder_with_fresh_vars(
+                                    self.infcx.instantiate_binder_with_fresh_vars_skipping_norm(
                                         obligation.cause.span,
                                         HigherRankedType,
                                         hr_source_projection,
@@ -2748,7 +2747,7 @@ impl<'tcx> SelectionContext<'_, 'tcx> {
         poly_trait_ref: ty::PolyTraitRef<'tcx>,
     ) -> Result<PredicateObligations<'tcx>, ()> {
         let predicate = self.infcx.enter_forall_and_leak_universe(obligation.predicate);
-        let trait_ref = self.infcx.instantiate_binder_with_fresh_vars(
+        let trait_ref = self.infcx.instantiate_binder_with_fresh_vars_skipping_norm(
             obligation.cause.span,
             HigherRankedType,
             poly_trait_ref,

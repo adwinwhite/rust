@@ -2287,7 +2287,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             let ty_args = self.infcx.fresh_args_for_item(span, similar_candidate.def_id);
             let fn_sig =
                 tcx.fn_sig(similar_candidate.def_id).instantiate(tcx, ty_args).skip_norm_wip();
-            let fn_sig = self.instantiate_binder_with_fresh_vars(
+            let fn_sig = self.instantiate_binder_with_fresh_vars_skipping_norm(
                 span,
                 BoundRegionConversionTime::FnCall,
                 fn_sig,
@@ -2374,7 +2374,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                             .fn_sig(inherent_method.def_id)
                             .instantiate(self.tcx, args)
                             .skip_norm_wip();
-                        let fn_sig = self.instantiate_binder_with_fresh_vars(
+                        let fn_sig = self.instantiate_binder_with_fresh_vars_skipping_norm(
                             item_name.span,
                             BoundRegionConversionTime::FnCall,
                             fn_sig,
