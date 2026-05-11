@@ -928,7 +928,7 @@ where
             // `Self` with the dyn type.
             let proj = proj.with_self_ty(cx, trait_ref.self_ty());
             replace_projection_with
-                .entry(proj.def_id().into())
+                .entry(proj.def_id(cx).into())
                 .or_default()
                 .push(bound.rebind(proj));
         }

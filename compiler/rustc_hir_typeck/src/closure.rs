@@ -591,7 +591,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         for bound in self.obligations_for_self_ty(return_vid) {
             if let Some(ret_projection) = bound.predicate.as_projection_clause()
                 && let Some(ret_projection) = ret_projection.no_bound_vars()
-                && self.tcx.is_lang_item(ret_projection.def_id(), LangItem::FutureOutput)
+                && self.tcx.is_lang_item(ret_projection.def_id(self.tcx), LangItem::FutureOutput)
             {
                 return_ty = Some(ret_projection.term.expect_type());
                 break;

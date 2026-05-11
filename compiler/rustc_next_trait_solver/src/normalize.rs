@@ -1,6 +1,6 @@
 use rustc_type_ir::data_structures::ensure_sufficient_stack;
 use rustc_type_ir::inherent::*;
-use rustc_type_ir::solve::{Goal, NoSolution};
+use rustc_type_ir::solve::{Goal, NoSolutionOrRerunNonErased};
 use rustc_type_ir::{
     self as ty, Binder, FallibleTypeFolder, InferConst, InferCtxtLike, InferTy, Interner,
     TypeFoldable, TypeSuperFoldable, TypeSuperVisitable, TypeVisitable, TypeVisitableExt,
@@ -113,7 +113,9 @@ impl<'a, Infcx, I, F> NormalizationFolder<'a, Infcx, I, F>
 where
     Infcx: InferCtxtLike<Interner = I>,
     I: Interner,
-    F: FnMut(I::Term) -> Result<(I::Term, Option<Goal<I, I::Predicate>>), NoSolution>,
+    F: FnMut(
+        I::Term,
+    ) -> Result<(I::Term, Option<Goal<I, I::Predicate>>), NoSolutionOrRerunNonErased>,
 {
     pub fn new(
         infcx: &'a Infcx,
@@ -132,7 +134,7 @@ where
         &mut self,
         alias_term: I::Term,
         has_escaping: HasEscapingBoundVars,
-    ) -> Result<(I::Term, NeedRenormalization), NoSolution> {
+    ) -> Result<(I::Term, NeedRenormalization), NoSolutionOrRerunNonErased> {
         let current_universe = self.infcx.universe();
         self.infcx.create_next_universe();
 
@@ -164,9 +166,11 @@ impl<'a, Infcx, I, F> FallibleTypeFolder<I> for NormalizationFolder<'a, Infcx, I
 where
     Infcx: InferCtxtLike<Interner = I>,
     I: Interner,
-    F: FnMut(I::Term) -> Result<(I::Term, Option<Goal<I, I::Predicate>>), NoSolution>,
+    F: FnMut(
+        I::Term,
+    ) -> Result<(I::Term, Option<Goal<I, I::Predicate>>), NoSolutionOrRerunNonErased>,
 {
-    type Error = NoSolution;
+    type Error = NoSolutionOrRerunNonErased;
 
     fn cx(&self) -> I {
         self.infcx.cx()
@@ -294,7 +298,9 @@ impl<'a, Infcx, I, F> BinderRenormalizer<'a, Infcx, I, F>
 where
     Infcx: InferCtxtLike<Interner = I>,
     I: Interner,
-    F: FnMut(I::Term) -> Result<(I::Term, Option<Goal<I, I::Predicate>>), NoSolution>,
+    F: FnMut(
+        I::Term,
+    ) -> Result<(I::Term, Option<Goal<I, I::Predicate>>), NoSolutionOrRerunNonErased>,
 {
     pub fn new(infcx: &'a Infcx, stalled_goals: Vec<Goal<I, I::Predicate>>, normalize: F) -> Self {
         Self { infcx, stalled_goals, normalize }
@@ -304,7 +310,10 @@ where
         self.stalled_goals
     }
 
-    fn normalize_alias_term(&mut self, alias_term: I::Term) -> Result<I::Term, NoSolution> {
+    fn normalize_alias_term(
+        &mut self,
+        alias_term: I::Term,
+    ) -> Result<I::Term, NoSolutionOrRerunNonErased> {
         let (normalized, ambig_goal) = (self.normalize)(alias_term)?;
 
         self.stalled_goals.extend(ambig_goal);
@@ -316,9 +325,11 @@ impl<'a, Infcx, I, F> FallibleTypeFolder<I> for BinderRenormalizer<'a, Infcx, I,
 where
     Infcx: InferCtxtLike<Interner = I>,
     I: Interner,
-    F: FnMut(I::Term) -> Result<(I::Term, Option<Goal<I, I::Predicate>>), NoSolution>,
+    F: FnMut(
+        I::Term,
+    ) -> Result<(I::Term, Option<Goal<I, I::Predicate>>), NoSolutionOrRerunNonErased>,
 {
-    type Error = NoSolution;
+    type Error = NoSolutionOrRerunNonErased;
 
     fn cx(&self) -> I {
         self.infcx.cx()

@@ -824,7 +824,7 @@ where
     ) -> QueryResultOrRerunNonErased<I> {
         let Goal { param_env, predicate } = goal;
         let kind = predicate.kind();
-        self.enter_forall(kind, |ecx, kind| {
+        self.enter_forall(goal.param_env, kind, |ecx, kind| {
             Ok(match kind {
                 ty::PredicateKind::Clause(ty::ClauseKind::Trait(predicate)) => {
                     ecx.compute_trait_goal(Goal { param_env, predicate }).map(|(r, _via)| r)?
@@ -878,6 +878,7 @@ where
                 }
             })
         })
+        .map_err(Into::into)
     }
 
     // Recursively evaluates all the goals added to this `EvalCtxt` to completion, returning
@@ -1323,7 +1324,7 @@ where
         &mut self,
         param_env: I::ParamEnv,
         value: ty::Binder<I, T>,
-    ) -> Result<T, NoSolution> {
+    ) -> Result<T, NoSolutionOrRerunNonErased> {
         let instantiated = self.delegate.instantiate_binder_with_infer(value);
         self.normalize_ambiguous_only(param_env, instantiated)
     }
@@ -1334,8 +1335,8 @@ where
         &mut self,
         param_env: I::ParamEnv,
         value: ty::Binder<I, T>,
-        f: impl FnOnce(&mut Self, T) -> Result<U, NoSolution>,
-    ) -> Result<U, NoSolution> {
+        f: impl FnOnce(&mut Self, T) -> Result<U, NoSolutionOrRerunNonErased>,
+    ) -> Result<U, NoSolutionOrRerunNonErased> {
         self.delegate.enter_forall(value, |value| {
             let value = self.normalize_ambiguous_only(param_env, value)?;
             f(self, value)
@@ -1707,7 +1708,7 @@ where
         &mut self,
         param_env: I::ParamEnv,
         value: ty::Unnormalized<I, T>,
-    ) -> Result<T, NoSolution> {
+    ) -> Result<T, NoSolutionOrRerunNonErased> {
         self.normalize_inner(param_env, value, NormalizationScope::All)
     }
 
@@ -1721,7 +1722,7 @@ where
         &mut self,
         param_env: I::ParamEnv,
         value: ty::Unnormalized<I, T>,
-    ) -> Result<T, NoSolution> {
+    ) -> Result<T, NoSolutionOrRerunNonErased> {
         self.normalize_inner(param_env, value, NormalizationScope::AmbiguousAlias)
     }
 
@@ -1730,7 +1731,7 @@ where
         param_env: I::ParamEnv,
         value: ty::Unnormalized<I, T>,
         scope: NormalizationScope,
-    ) -> Result<T, NoSolution> {
+    ) -> Result<T, NoSolutionOrRerunNonErased> {
         let value = value.skip_normalization();
         let value = self.delegate.resolve_vars_if_possible(value);
         // To drop the mutable borrow of self early.

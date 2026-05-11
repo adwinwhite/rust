@@ -536,7 +536,7 @@ impl<I: Interner> ExistentialProjection<I> {
         projection_predicate.projection_term.args.type_at(0);
 
         Self {
-            def_id: projection_predicate.def_id(),
+            def_id: projection_predicate.def_id(interner),
             args: interner.mk_args(&projection_predicate.projection_term.args.as_slice()[1..]),
             term: projection_predicate.term,
             use_existential_projection_new_instead: (),
@@ -854,7 +854,8 @@ impl<I: Interner> AliasTerm<I> {
     /// then this function would return a `T: StreamingIterator` trait reference and
     /// `['a]` as the own args.
     pub fn trait_ref_and_own_args(self, interner: I) -> (TraitRef<I>, I::GenericArgsSlice) {
-        interner.trait_ref_and_own_args_for_alias(self.expect_projection_def_id(), self.args)
+        interner
+            .trait_ref_and_own_args_for_alias(self.expect_projection_def_id(interner), self.args)
     }
 
     /// Extracts the underlying trait reference from this projection.
@@ -952,8 +953,8 @@ impl<I: Interner> ProjectionPredicate<I> {
         self.projection_term.trait_def_id(interner)
     }
 
-    pub fn def_id(self) -> I::TraitAssocTermId {
-        self.projection_term.expect_projection_def_id()
+    pub fn def_id(self, interner: I) -> I::TraitAssocTermId {
+        self.projection_term.expect_projection_def_id(interner)
     }
 }
 

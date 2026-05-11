@@ -1697,9 +1697,11 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                     return None;
                 };
 
-                let Ok(node) =
-                    specialization_graph::assoc_def(self.tcx, impl_data.impl_def_id, proj.def_id())
-                else {
+                let Ok(node) = specialization_graph::assoc_def(
+                    self.tcx,
+                    impl_data.impl_def_id,
+                    proj.def_id(self.tcx),
+                ) else {
                     return None;
                 };
 
