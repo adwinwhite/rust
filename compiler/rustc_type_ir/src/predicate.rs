@@ -653,6 +653,7 @@ impl<I: Interner> From<ty::AliasTyKind<I>> for AliasTermKind<I> {
             ty::Opaque { def_id } => AliasTermKind::OpaqueTy { def_id },
             ty::Free { def_id } => AliasTermKind::FreeTy { def_id },
             ty::Inherent { def_id } => AliasTermKind::InherentTy { def_id },
+            ty::Ambiguous { .. } => unreachable!(),
         }
     }
 }
