@@ -327,7 +327,7 @@ fn compare_method_predicate_entailment<'tcx>(
     let mut wf_tys = FxIndexSet::default();
 
     // We need to check wf of unnormalized sig.
-    let unnormalized_impl_sig = infcx.instantiate_binder_with_fresh_vars(
+    let unnormalized_impl_sig = infcx.instantiate_binder_with_fresh_vars_skipping_norm(
         impl_m_span,
         BoundRegionConversionTime::HigherRankedType,
         tcx.fn_sig(impl_m.def_id).instantiate_identity().skip_norm_wip(),

@@ -1364,7 +1364,8 @@ impl<'tcx> InferCtxt<'tcx> {
         T: TypeFoldable<TyCtxt<'tcx>> + Copy,
         F: FnMut(ty::Unnormalized<'tcx, T>) -> T,
     {
-        let instantiated = self.instantiate_binder_with_fresh_vars(span, lbrct, value);
+        let instantiated =
+            self.instantiate_binder_with_fresh_vars_skipping_norm(span, lbrct, value);
         normalize(ty::Unnormalized::new(instantiated))
     }
 
@@ -1375,7 +1376,7 @@ impl<'tcx> InferCtxt<'tcx> {
     // variables (e.g. during a method call). If there isn't a [`BoundRegionConversionTime`]
     // that corresponds to your use case, consider whether or not you should
     // use [`InferCtxt::enter_forall`] instead.
-    pub fn instantiate_binder_with_fresh_vars<T>(
+    pub fn instantiate_binder_with_fresh_vars_skipping_norm<T>(
         &self,
         span: Span,
         lbrct: BoundRegionConversionTime,

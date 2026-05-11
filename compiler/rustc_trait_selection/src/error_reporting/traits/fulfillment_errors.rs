@@ -1430,7 +1430,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
             return false;
         }
 
-        let trait_assumption = self.instantiate_binder_with_fresh_vars(
+        let trait_assumption = self.instantiate_binder_with_fresh_vars_skipping_norm(
             DUMMY_SP,
             infer::BoundRegionConversionTime::HigherRankedType,
             assumption,
@@ -1445,7 +1445,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
         goal: ty::HostEffectPredicate<'tcx>,
         assumption: ty::Binder<'tcx, ty::HostEffectPredicate<'tcx>>,
     ) -> bool {
-        let assumption = self.instantiate_binder_with_fresh_vars(
+        let assumption = self.instantiate_binder_with_fresh_vars_skipping_norm(
             DUMMY_SP,
             infer::BoundRegionConversionTime::HigherRankedType,
             assumption,
@@ -1470,7 +1470,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
         goal: ty::ProjectionPredicate<'tcx>,
         assumption: ty::PolyProjectionPredicate<'tcx>,
     ) -> bool {
-        let assumption = self.instantiate_binder_with_fresh_vars(
+        let assumption = self.instantiate_binder_with_fresh_vars_skipping_norm(
             DUMMY_SP,
             infer::BoundRegionConversionTime::HigherRankedType,
             assumption,
@@ -1545,7 +1545,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                 ty::PredicateKind::Clause(ty::ClauseKind::Projection(data)) => {
                     let ocx = ObligationCtxt::new(self);
 
-                    let data = self.instantiate_binder_with_fresh_vars(
+                    let data = self.instantiate_binder_with_fresh_vars_skipping_norm(
                         obligation.cause.span,
                         infer::BoundRegionConversionTime::HigherRankedType,
                         bound_predicate.rebind(data),
