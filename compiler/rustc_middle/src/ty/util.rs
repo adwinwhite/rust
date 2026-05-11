@@ -941,7 +941,7 @@ impl<'tcx> TyCtxt<'tcx> {
         self,
         kind: impl Into<ty::AliasTermKind<'tcx>>,
     ) -> Option<&'tcx [ty::Variance]> {
-        match kind.into() {
+        match kind.into().reveal_ambiguous(self) {
             ty::AliasTermKind::ProjectionTy { def_id } => {
                 if self.is_impl_trait_in_trait(def_id) {
                     Some(self.variances_of(def_id))
@@ -956,6 +956,7 @@ impl<'tcx> TyCtxt<'tcx> {
             | ty::AliasTermKind::FreeConst { .. }
             | ty::AliasTermKind::UnevaluatedConst { .. }
             | ty::AliasTermKind::ProjectionConst { .. } => None,
+            ty::AliasTermKind::AmbiguousTy { .. } => unreachable!(),
         }
     }
 }

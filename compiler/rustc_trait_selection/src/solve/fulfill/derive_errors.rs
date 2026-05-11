@@ -402,7 +402,8 @@ impl<'tcx> BestObligation<'tcx> {
             }
             Some(ty::PredicateKind::NormalizesTo(pred))
                 if let ty::AliasTermKind::ProjectionTy { .. }
-                | ty::AliasTermKind::ProjectionConst { .. } = pred.alias.kind(tcx) =>
+                | ty::AliasTermKind::ProjectionConst { .. } =
+                    pred.alias.kind(tcx).reveal_ambiguous(tcx) =>
             {
                 self.detect_error_in_self_ty_normalization(goal, pred.alias.self_ty())?;
                 self.detect_non_well_formed_assoc_item(goal, pred.alias)?;
@@ -469,7 +470,7 @@ impl<'tcx> ProofTreeVisitor<'tcx> for BestObligation<'tcx> {
             }
             ty::PredicateKind::NormalizesTo(normalizes_to)
                 if matches!(
-                    normalizes_to.alias.kind(tcx),
+                    normalizes_to.alias.kind(tcx).reveal_ambiguous(tcx),
                     ty::AliasTermKind::ProjectionTy { .. }
                         | ty::AliasTermKind::ProjectionConst { .. }
                 ) =>

@@ -340,6 +340,7 @@ impl<'a, 'tcx> QueryNormalizer<'a, 'tcx> {
                 tcx.normalize_canonicalized_inherent_projection(c_term)
             }
             kind @ (ty::AliasTermKind::OpaqueTy { .. }
+            | ty::AliasTermKind::AmbiguousTy { .. }
             | ty::AliasTermKind::UnevaluatedConst { .. }) => {
                 unreachable!("did not expect {kind:?} due to match arm above")
             }
