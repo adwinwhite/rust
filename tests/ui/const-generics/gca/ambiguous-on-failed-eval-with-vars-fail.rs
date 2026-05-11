@@ -28,6 +28,7 @@ fn free<const N: usize>() -> ([(); N], [(); FREE::<N>]) {
 fn test_free() {
     let (mut arr, mut arr_with_weird_len) = free();
     //[next]~^ ERROR type annotations needed
+    //[next]~| ERROR type annotations needed
     arr_with_weird_len = [(); 10];
 }
 
@@ -45,6 +46,7 @@ fn proj<const N: usize>() -> ([(); N], [(); <S as Trait>::PROJ::<N>]) {
 fn test_proj() {
     let (mut arr, mut arr_with_weird_len) = proj();
     //[next]~^ ERROR type annotations needed
+    //[next]~| ERROR type annotations needed
     arr_with_weird_len = [(); 10];
 }
 

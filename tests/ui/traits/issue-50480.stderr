@@ -106,20 +106,20 @@ LL | struct Foo(N, NotDefined, <i32 as Iterator>::Item, Vec<i32>, String);
    = help: the trait `Iterator` is not implemented for `i32`
 
 error[E0277]: `i32` is not an iterator
-  --> $DIR/issue-50480.rs:11:10
-   |
-LL | #[derive(Clone, Copy)]
-   |          ^^^^^ `i32` is not an iterator
-   |
-   = help: the trait `Iterator` is not implemented for `i32`
-
-error[E0277]: `i32` is not an iterator
   --> $DIR/issue-50480.rs:12:33
    |
 LL | #[derive(Clone, Copy)]
    |          ----- in this derive macro expansion
 LL | struct Bar<T>(T, N, NotDefined, <i32 as Iterator>::Item, Vec<i32>, String);
    |                                 ^^^^^^^^^^^^^^^^^^^^^^^ `i32` is not an iterator
+   |
+   = help: the trait `Iterator` is not implemented for `i32`
+
+error[E0277]: `i32` is not an iterator
+  --> $DIR/issue-50480.rs:11:10
+   |
+LL | #[derive(Clone, Copy)]
+   |          ^^^^^ `i32` is not an iterator
    |
    = help: the trait `Iterator` is not implemented for `i32`
 
