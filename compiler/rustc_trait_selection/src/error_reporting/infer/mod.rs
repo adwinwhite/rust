@@ -182,10 +182,10 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
     pub fn get_impl_future_output_ty(&self, ty: Ty<'tcx>) -> Option<Ty<'tcx>> {
         let (def_id, args) = match *ty.kind() {
             ty::Alias(ty::AliasTy { kind: ty::Opaque { def_id }, args, .. }) => (def_id, args),
-            ty::Alias(ty::AliasTy { kind, args, .. })
-                if self.tcx.is_impl_trait_in_trait(kind.def_id()) =>
+            ty::Alias(alias @ ty::AliasTy { args, .. })
+                if self.tcx.is_impl_trait_in_trait(alias.def_id()) =>
             {
-                (kind.def_id(), args)
+                (alias.def_id(), args)
             }
             _ => return None,
         };

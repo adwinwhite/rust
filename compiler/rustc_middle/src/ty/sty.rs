@@ -478,7 +478,7 @@ impl<'tcx> Ty<'tcx> {
     #[inline]
     pub fn new_alias(tcx: TyCtxt<'tcx>, alias_ty: ty::AliasTy<'tcx>) -> Ty<'tcx> {
         debug_assert_matches!(
-            (alias_ty.kind, tcx.def_kind(alias_ty.kind.def_id())),
+            (alias_ty.kind, tcx.def_kind(alias_ty.def_id())),
             (ty::Opaque { .. }, DefKind::OpaqueTy)
                 | (ty::Projection { .. } | ty::Inherent { .. }, DefKind::AssocTy)
                 | (ty::Free { .. }, DefKind::TyAlias)

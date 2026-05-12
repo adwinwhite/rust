@@ -32,9 +32,9 @@ impl<'tcx> Stable<'tcx> for ty::AliasTy<'tcx> {
         tables: &mut Tables<'cx, BridgeTys>,
         cx: &CompilerCtxt<'cx, BridgeTys>,
     ) -> Self::T {
-        let ty::AliasTy { args, kind, .. } = self;
+        let ty::AliasTy { args, .. } = self;
         crate::ty::AliasTy {
-            def_id: tables.alias_def(kind.def_id()),
+            def_id: tables.alias_def(self.def_id()),
             args: args.stable(tables, cx),
         }
     }
@@ -47,9 +47,9 @@ impl<'tcx> Stable<'tcx> for ty::AliasTerm<'tcx> {
         tables: &mut Tables<'cx, BridgeTys>,
         cx: &CompilerCtxt<'cx, BridgeTys>,
     ) -> Self::T {
-        let ty::AliasTerm { args, kind, .. } = self;
+        let ty::AliasTerm { args, .. } = self;
         crate::ty::AliasTerm {
-            def_id: tables.alias_def(kind.def_id()),
+            def_id: tables.alias_def(self.def_id()),
             args: args.stable(tables, cx),
         }
     }

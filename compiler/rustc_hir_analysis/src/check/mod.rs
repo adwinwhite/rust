@@ -488,7 +488,7 @@ fn fn_sig_suggestion<'tcx>(
     let asyncness = if tcx.asyncness(assoc.def_id).is_async() {
         output = if let ty::Alias(alias_ty) = *output.kind()
             && let Some(output) = tcx
-                .explicit_item_self_bounds(alias_ty.kind.def_id())
+                .explicit_item_self_bounds(alias_ty.def_id())
                 .iter_instantiated_copied(tcx, alias_ty.args)
                 .map(Unnormalized::skip_norm_wip)
                 .find_map(|(bound, _)| {

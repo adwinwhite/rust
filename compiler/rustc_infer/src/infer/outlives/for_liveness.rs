@@ -56,11 +56,11 @@ where
             // either `'static` or a unique outlives region, and if one is
             // found, we just need to prove that that region is still live.
             // If one is not found, then we continue to walk through the alias.
-            ty::Alias(alias @ ty::AliasTy { kind, args, .. }) => {
+            ty::Alias(alias @ ty::AliasTy { args, .. }) => {
                 let tcx = self.tcx;
                 let param_env = self.param_env;
                 let outlives_bounds: Vec<_> = tcx
-                    .item_bounds(kind.def_id())
+                    .item_bounds(alias.def_id())
                     .iter_instantiated(tcx, args)
                     .map(Unnormalized::skip_norm_wip)
                     .chain(param_env.caller_bounds())

@@ -613,7 +613,7 @@ impl<T> Trait<T> for X {
         let Some(body_owner_def_id) = body_owner_def_id else {
             return false;
         };
-        let assoc = tcx.associated_item(proj_ty.kind.def_id());
+        let assoc = tcx.associated_item(proj_ty.def_id());
         let (trait_ref, assoc_args) = proj_ty.trait_ref_and_own_args(tcx);
         let Some(item) = tcx.hir_get_if_local(body_owner_def_id) else {
             return false;
@@ -721,9 +721,9 @@ impl<T> Trait<T> for X {
             let point_at_assoc_fn = if callable_scope
                 && self.point_at_methods_that_satisfy_associated_type(
                     diag,
-                    tcx.parent(proj_ty.kind.def_id()),
+                    tcx.parent(proj_ty.def_id()),
                     current_method_ident,
-                    proj_ty.kind.def_id(),
+                    proj_ty.def_id(),
                     values.expected,
                 ) {
                 // If we find a suitable associated function that returns the expected type, we
@@ -796,7 +796,7 @@ fn foo(&self) -> Self::T { String::new() }
     ) -> bool {
         let tcx = self.tcx;
 
-        let assoc = tcx.associated_item(proj_ty.kind.def_id());
+        let assoc = tcx.associated_item(proj_ty.def_id());
         if let ty::Alias(ty::AliasTy { kind: ty::Opaque { def_id }, .. }) =
             *proj_ty.self_ty().kind()
         {

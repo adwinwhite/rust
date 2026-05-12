@@ -83,7 +83,7 @@ pub(crate) fn check_refining_return_position_impl_trait_in_trait<'tcx>(
 
     for trait_projection in collector.types.into_iter().rev() {
         let impl_opaque_args = trait_projection.args.rebase_onto(tcx, trait_m.def_id, impl_m_args);
-        let hidden_ty = hidden_tys[&trait_projection.kind.def_id()]
+        let hidden_ty = hidden_tys[&trait_projection.def_id()]
             .instantiate(tcx, impl_opaque_args)
             .skip_norm_wip();
 
@@ -124,7 +124,7 @@ pub(crate) fn check_refining_return_position_impl_trait_in_trait<'tcx>(
         }
 
         trait_bounds.extend(
-            tcx.item_bounds(trait_projection.kind.def_id())
+            tcx.item_bounds(trait_projection.def_id())
                 .iter_instantiated(tcx, trait_projection.args)
                 .map(Unnormalized::skip_norm_wip),
         );
@@ -231,7 +231,7 @@ pub(crate) fn check_refining_return_position_impl_trait_in_trait<'tcx>(
     // is literally unrepresentable in the type system; however, we may be
     // promising stronger outlives guarantees if we capture *fewer* regions.
     for (trait_projection, impl_opaque) in pairs {
-        let impl_variances = tcx.variances_of(impl_opaque.kind.def_id());
+        let impl_variances = tcx.variances_of(impl_opaque.def_id());
         let impl_captures: FxIndexSet<_> = impl_opaque
             .args
             .iter()
@@ -240,7 +240,7 @@ pub(crate) fn check_refining_return_position_impl_trait_in_trait<'tcx>(
             .map(|(arg, _)| arg)
             .collect();
 
-        let trait_variances = tcx.variances_of(trait_projection.kind.def_id());
+        let trait_variances = tcx.variances_of(trait_projection.def_id());
         let mut trait_captures = FxIndexSet::default();
         for (arg, variance) in trait_projection.args.iter().zip_eq(trait_variances) {
             if *variance != ty::Invariant {
@@ -252,7 +252,7 @@ pub(crate) fn check_refining_return_position_impl_trait_in_trait<'tcx>(
         if !trait_captures.iter().all(|arg| impl_captures.contains(arg)) {
             report_mismatched_rpitit_captures(
                 tcx,
-                impl_opaque.kind.def_id().expect_local(),
+                impl_opaque.def_id().expect_local(),
                 trait_captures,
                 is_internal,
             );

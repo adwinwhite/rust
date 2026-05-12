@@ -88,14 +88,21 @@ impl<I: Interner> AliasTyKind<I> {
         }
     }
 
-    pub fn def_id(self) -> I::DefId {
+    // FIXME: this should be removed.
+    // In the meantime, We can `reveal_ambiguous` and call this method?
+    pub fn def_id(self, args: I::GenericArgs) -> I::DefId {
         match self {
             AliasTyKind::Projection { def_id } => def_id.into(),
             AliasTyKind::Inherent { def_id } => def_id.into(),
             AliasTyKind::Opaque { def_id } => def_id.into(),
             AliasTyKind::Free { def_id } => def_id.into(),
-            // FIXME: in the meantime, We can `reveal_ambiguous` and call this method?
-            AliasTyKind::Ambiguous => todo!("this method is expected to be removed"),
+            AliasTyKind::Ambiguous => {
+                let ty::Alias(ty::AliasTy { kind, args: inner_args, .. }) = args.type_at(0).kind()
+                else {
+                    unreachable!()
+                };
+                kind.def_id(inner_args)
+            }
         }
     }
 
@@ -492,7 +499,11 @@ impl<I: Interner> Eq for AliasTy<I> {}
 
 impl<I: Interner> AliasTy<I> {
     pub fn new_from_args(interner: I, kind: AliasTyKind<I>, args: I::GenericArgs) -> AliasTy<I> {
-        interner.debug_assert_args_compatible(kind.def_id(), args);
+        // FIXME: skipping args compatibility check for `Ambiguous`.
+        // Should be fixed with the removal the `def_id` method .
+        if !matches!(kind, AliasTyKind::Ambiguous) {
+            interner.debug_assert_args_compatible(kind.def_id(args), args);
+        }
         AliasTy { kind, args, _use_alias_ty_new_instead: () }
     }
 
@@ -512,6 +523,11 @@ impl<I: Interner> AliasTy<I> {
 
     pub fn to_ty(self, interner: I) -> I::Ty {
         Ty::new_alias(interner, self)
+    }
+
+    /// HACK: to get the def_id of `Ambiguous`.
+    pub fn def_id(self) -> I::DefId {
+        self.kind.def_id(self.args)
     }
 }
 

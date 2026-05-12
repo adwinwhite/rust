@@ -236,7 +236,7 @@ fn evaluate_host_effect_from_conditionally_const_item_bounds<'tcx>(
             // An alias bound only holds if we also check the const conditions
             // of the alias, so we need to register those, too.
             let const_conditions =
-                tcx.const_conditions(alias_ty.kind.def_id()).instantiate(tcx, alias_ty.args);
+                tcx.const_conditions(alias_ty.def_id()).instantiate(tcx, alias_ty.args);
             let const_conditions: Vec<_> = const_conditions
                 .into_iter()
                 .map(|(trait_ref, span)| {

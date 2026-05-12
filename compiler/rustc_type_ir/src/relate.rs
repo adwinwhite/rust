@@ -213,10 +213,10 @@ impl<I: Interner> Relate<I> for ty::AliasTy<I> {
         a: ty::AliasTy<I>,
         b: ty::AliasTy<I>,
     ) -> RelateResult<I, ty::AliasTy<I>> {
-        if a.kind.def_id() != b.kind.def_id() {
+        if a.kind.def_id(a.args) != b.kind.def_id(b.args) {
             Err(TypeError::ProjectionMismatched(ExpectedFound::new(
-                a.kind.def_id(),
-                b.kind.def_id(),
+                a.kind.def_id(a.args),
+                b.kind.def_id(b.args),
             )))
         } else {
             let cx = relation.cx();

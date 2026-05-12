@@ -802,7 +802,7 @@ where
             AliasBoundKind::SelfBounds => {
                 for assumption in self
                     .cx()
-                    .item_self_bounds(alias_ty.kind.def_id())
+                    .item_self_bounds(alias_ty.def_id())
                     .iter_instantiated(self.cx(), alias_ty.args)
                     .map(Unnormalized::skip_norm_wip)
                 {
@@ -818,7 +818,7 @@ where
             AliasBoundKind::NonSelfBounds => {
                 for assumption in self
                     .cx()
-                    .item_non_self_bounds(alias_ty.kind.def_id())
+                    .item_non_self_bounds(alias_ty.def_id())
                     .iter_instantiated(self.cx(), alias_ty.args)
                     .map(Unnormalized::skip_norm_wip)
                 {
@@ -1102,7 +1102,7 @@ where
             // in a `?x: Trait<u32>` alias-bound candidate.
             for item_bound in self
                 .cx()
-                .item_self_bounds(alias_ty.kind.def_id())
+                .item_self_bounds(alias_ty.def_id())
                 .iter_instantiated(self.cx(), alias_ty.args)
                 .map(Unnormalized::skip_norm_wip)
             {

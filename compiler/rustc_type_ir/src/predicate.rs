@@ -643,17 +643,24 @@ impl<I: Interner> AliasTermKind<I> {
     }
 
     // FIXME(#156181): replace with explicit matches
-    pub fn def_id(self) -> I::DefId {
+    // In the meantime, We can `reveal_ambiguous` and call this method?
+    pub fn def_id(self, args: I::GenericArgs) -> I::DefId {
         match self {
             AliasTermKind::ProjectionTy { def_id } => def_id.into(),
             AliasTermKind::InherentTy { def_id } => def_id.into(),
             AliasTermKind::OpaqueTy { def_id } => def_id.into(),
             AliasTermKind::FreeTy { def_id } => def_id.into(),
-            AliasTermKind::AmbiguousTy => todo!("this method is expected to be removed"),
             AliasTermKind::UnevaluatedConst { def_id } => def_id.into(),
             AliasTermKind::ProjectionConst { def_id } => def_id.into(),
             AliasTermKind::FreeConst { def_id } => def_id.into(),
             AliasTermKind::InherentConst { def_id } => def_id.into(),
+            AliasTermKind::AmbiguousTy => {
+                let ty::Alias(ty::AliasTy { kind, args: inner_args, .. }) = args.type_at(0).kind()
+                else {
+                    unreachable!()
+                };
+                kind.def_id(inner_args)
+            }
         }
     }
 
@@ -726,7 +733,7 @@ impl<I: Interner> AliasTerm<I> {
         // FIXME: skipping args compatibility check for `Ambiguous`.
         // Should be fixed with the removal the `def_id` method .
         if !matches!(kind, AliasTermKind::AmbiguousTy) {
-            interner.debug_assert_args_compatible(kind.def_id(), args);
+            interner.debug_assert_args_compatible(kind.def_id(args), args);
         }
         AliasTerm { kind, args, _use_alias_term_new_instead: () }
     }
@@ -791,7 +798,7 @@ impl<I: Interner> AliasTerm<I> {
 
     // FIXME: replace with explicit matches
     pub fn def_id(self) -> I::DefId {
-        self.kind.def_id()
+        self.kind.def_id(self.args)
     }
 
     pub fn to_term(self, interner: I) -> I::Term {
