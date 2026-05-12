@@ -127,11 +127,12 @@ pub fn validate_trivial_unsize<'tcx>(
             let universe = infcx.universe();
             let ocx = ObligationCtxt::new(&infcx);
             infcx.enter_forall_skipping_norm(hr_target_principal, |target_principal| {
-                let source_principal = infcx.instantiate_binder_with_fresh_vars_skipping_norm(
-                    DUMMY_SP,
-                    BoundRegionConversionTime::HigherRankedType,
-                    hr_source_principal,
-                );
+                let source_principal = infcx
+                    .instantiate_binder_with_fresh_vars_no_ambiguous_aliases(
+                        DUMMY_SP,
+                        BoundRegionConversionTime::HigherRankedType,
+                        hr_source_principal,
+                    );
                 let Ok(()) = ocx.eq(
                     &ObligationCause::dummy(),
                     param_env,

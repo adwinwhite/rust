@@ -824,19 +824,20 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // [c2]: https://github.com/rust-lang/rust/pull/45072#issuecomment-341096796
         self.commit_if_ok(|_| {
             let mut all_obligations = PredicateObligations::new();
-            let supplied_sig = self.instantiate_binder_with_fresh_vars_and_normalize_with(
-                self.tcx.def_span(expr_def_id),
-                BoundRegionConversionTime::FnCall,
-                supplied_sig,
-                |value| {
-                    // FIXME: a proper cause?
-                    let cause = self.misc(DUMMY_SP);
-                    let InferOk { value, obligations } =
-                        self.at(&cause, self.param_env).normalize_ambiguous_only(value);
-                    all_obligations.extend(obligations);
-                    value
-                },
-            );
+            let supplied_sig = self
+                .instantiate_binder_with_fresh_vars_renormalize_ambiguous_aliases_with(
+                    self.tcx.def_span(expr_def_id),
+                    BoundRegionConversionTime::FnCall,
+                    supplied_sig,
+                    |value| {
+                        // FIXME: a proper cause?
+                        let cause = self.misc(DUMMY_SP);
+                        let InferOk { value, obligations } =
+                            self.at(&cause, self.param_env).renormalize_ambiguous_aliases(value);
+                        all_obligations.extend(obligations);
+                        value
+                    },
+                );
 
             // The liberated version of this signature should be a subtype
             // of the liberated form of the expectation.

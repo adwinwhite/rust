@@ -1012,7 +1012,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
             return false;
         }
 
-        let self_ty = self.instantiate_binder_with_fresh_vars_skipping_norm(
+        let self_ty = self.instantiate_binder_with_fresh_vars_no_ambiguous_aliases(
             DUMMY_SP,
             BoundRegionConversionTime::FnCall,
             trait_pred.self_ty(),
@@ -1556,7 +1556,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
             return None;
         };
 
-        let output = self.instantiate_binder_with_fresh_vars_skipping_norm(
+        let output = self.instantiate_binder_with_fresh_vars_no_ambiguous_aliases(
             DUMMY_SP,
             BoundRegionConversionTime::FnCall,
             output,
@@ -1565,7 +1565,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
             .skip_binder()
             .iter()
             .map(|ty| {
-                self.instantiate_binder_with_fresh_vars_skipping_norm(
+                self.instantiate_binder_with_fresh_vars_no_ambiguous_aliases(
                     DUMMY_SP,
                     BoundRegionConversionTime::FnCall,
                     inputs.rebind(*ty),
@@ -4844,11 +4844,12 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                     && where_pred.def_id() == failed_pred.def_id()
                 {
                     self.enter_forall_skipping_norm(where_pred, |where_pred| {
-                        let failed_pred = self.instantiate_binder_with_fresh_vars_skipping_norm(
-                            expr.span,
-                            BoundRegionConversionTime::FnCall,
-                            failed_pred,
-                        );
+                        let failed_pred = self
+                            .instantiate_binder_with_fresh_vars_no_ambiguous_aliases(
+                                expr.span,
+                                BoundRegionConversionTime::FnCall,
+                                failed_pred,
+                            );
 
                         let zipped =
                             iter::zip(where_pred.trait_ref.args, failed_pred.trait_ref.args);

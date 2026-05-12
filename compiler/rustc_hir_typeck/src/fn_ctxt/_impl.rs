@@ -435,7 +435,22 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         )
     }
 
-    pub(crate) fn instantiate_binder_with_fresh_vars_and_normalize<T>(
+    // FIXME: This isn't used much. Maybe remove this and make the inner method private.
+    pub(crate) fn instantiate_binder_with_fresh_vars_fully_normalize<T>(
+        &self,
+        span: Span,
+        lbrct: BoundRegionConversionTime,
+        value: Unnormalized<'tcx, ty::Binder<'tcx, T>>,
+    ) -> T
+    where
+        T: TypeFoldable<TyCtxt<'tcx>> + Copy,
+    {
+        let instantiated =
+            value.map(|binder| self.instantiate_binder_with_fresh_vars(span, lbrct, binder));
+        self.normalize(span, instantiated)
+    }
+
+    pub(crate) fn instantiate_binder_with_fresh_vars_renormalize_ambiguous_aliases<T>(
         &self,
         span: Span,
         lbrct: BoundRegionConversionTime,
@@ -444,9 +459,12 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     where
         T: TypeFoldable<TyCtxt<'tcx>> + Copy,
     {
-        self.instantiate_binder_with_fresh_vars_and_normalize_with(span, lbrct, value, |u| {
-            self.normalize(span, u)
-        })
+        self.instantiate_binder_with_fresh_vars_renormalize_ambiguous_aliases_with(
+            span,
+            lbrct,
+            value,
+            |value| self.at(&self.misc(span), self.param_env).renormalize_ambiguous_aliases(value),
+        )
     }
 
     pub(crate) fn require_type_meets(

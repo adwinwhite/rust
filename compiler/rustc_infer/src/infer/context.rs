@@ -168,7 +168,7 @@ impl<'tcx> rustc_type_ir::InferCtxtLike for InferCtxt<'tcx> {
         &self,
         value: ty::Binder<'tcx, T>,
     ) -> ty::Unnormalized<'tcx, T> {
-        let instantiated = self.instantiate_binder_with_fresh_vars_skipping_norm(
+        let instantiated = self.instantiate_binder_with_fresh_vars(
             DUMMY_SP,
             BoundRegionConversionTime::HigherRankedType,
             value,

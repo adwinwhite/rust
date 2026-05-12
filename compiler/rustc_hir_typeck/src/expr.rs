@@ -647,11 +647,12 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     let span = call_expr_and_args
                         .and_then(|(_, args)| args.get(i))
                         .map_or(expr.span, |arg| arg.span);
-                    let input = self.instantiate_binder_with_fresh_vars_and_normalize(
-                        span,
-                        infer::BoundRegionConversionTime::FnCall,
-                        fn_sig.input(i),
-                    );
+                    let input = self
+                        .instantiate_binder_with_fresh_vars_renormalize_ambiguous_aliases(
+                            span,
+                            infer::BoundRegionConversionTime::FnCall,
+                            fn_sig.input(i),
+                        );
                     self.require_type_is_sized_deferred(
                         input,
                         span,
@@ -664,7 +665,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             // Also, as we just want to check sizedness, instead of introducing
             // placeholder lifetimes with probing, we just replace higher lifetimes
             // with fresh vars.
-            let output = self.instantiate_binder_with_fresh_vars_and_normalize(
+            let output = self.instantiate_binder_with_fresh_vars_renormalize_ambiguous_aliases(
                 expr.span,
                 infer::BoundRegionConversionTime::FnCall,
                 fn_sig.output(),
@@ -1572,7 +1573,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 let binder_ty = self.structurally_resolve_type(inner_expr.span, binder_ty);
                 let hint_ty = match *binder_ty.kind() {
                     ty::UnsafeBinder(binder) => self
-                        .instantiate_binder_with_fresh_vars_and_normalize(
+                        .instantiate_binder_with_fresh_vars_renormalize_ambiguous_aliases(
                             inner_expr.span,
                             infer::BoundRegionConversionTime::HigherRankedType,
                             binder.into(),
@@ -1610,7 +1611,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 let binder_ty = self.structurally_resolve_type(inner_expr.span, binder_ty);
                 match *binder_ty.kind() {
                     ty::UnsafeBinder(binder) => self
-                        .instantiate_binder_with_fresh_vars_and_normalize(
+                        .instantiate_binder_with_fresh_vars_renormalize_ambiguous_aliases(
                             inner_expr.span,
                             infer::BoundRegionConversionTime::HigherRankedType,
                             binder.into(),

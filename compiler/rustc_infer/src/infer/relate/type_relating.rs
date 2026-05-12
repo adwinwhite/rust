@@ -300,7 +300,7 @@ impl<'tcx> TypeRelation<TyCtxt<'tcx>> for TypeRelating<'_, 'tcx> {
                 // [rd]: https://rustc-dev-guide.rust-lang.org/borrow_check/region_inference/placeholders_and_universes.html
                 ty::Covariant => {
                     infcx.enter_forall_skipping_norm(b, |b| {
-                        let a = infcx.instantiate_binder_with_fresh_vars_skipping_norm(
+                        let a = infcx.instantiate_binder_with_fresh_vars_no_ambiguous_aliases(
                             span,
                             HigherRankedType,
                             a,
@@ -310,7 +310,7 @@ impl<'tcx> TypeRelation<TyCtxt<'tcx>> for TypeRelating<'_, 'tcx> {
                 }
                 ty::Contravariant => {
                     infcx.enter_forall_skipping_norm(a, |a| {
-                        let b = infcx.instantiate_binder_with_fresh_vars_skipping_norm(
+                        let b = infcx.instantiate_binder_with_fresh_vars_no_ambiguous_aliases(
                             span,
                             HigherRankedType,
                             b,
@@ -331,7 +331,7 @@ impl<'tcx> TypeRelation<TyCtxt<'tcx>> for TypeRelating<'_, 'tcx> {
                 // Check if `exists<..> A == for<..> B`
                 ty::Invariant => {
                     infcx.enter_forall_skipping_norm(b, |b| {
-                        let a = infcx.instantiate_binder_with_fresh_vars_skipping_norm(
+                        let a = infcx.instantiate_binder_with_fresh_vars_no_ambiguous_aliases(
                             span,
                             HigherRankedType,
                             a,
@@ -341,7 +341,7 @@ impl<'tcx> TypeRelation<TyCtxt<'tcx>> for TypeRelating<'_, 'tcx> {
 
                     // Check if `exists<..> B == for<..> A`.
                     infcx.enter_forall_skipping_norm(a, |a| {
-                        let b = infcx.instantiate_binder_with_fresh_vars_skipping_norm(
+                        let b = infcx.instantiate_binder_with_fresh_vars_no_ambiguous_aliases(
                             span,
                             HigherRankedType,
                             b,

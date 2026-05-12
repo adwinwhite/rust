@@ -327,7 +327,7 @@ fn compare_method_predicate_entailment<'tcx>(
     let mut wf_tys = FxIndexSet::default();
 
     // We need to check wf of unnormalized sig.
-    let unnormalized_impl_sig = infcx.instantiate_binder_with_fresh_vars_skipping_norm(
+    let unnormalized_impl_sig = infcx.instantiate_binder_with_fresh_vars_no_ambiguous_aliases(
         impl_m_span,
         BoundRegionConversionTime::HigherRankedType,
         tcx.fn_sig(impl_m.def_id).instantiate_identity().skip_norm_wip(),
@@ -535,11 +535,12 @@ pub(super) fn collect_return_position_impl_trait_in_trait_tys<'tcx>(
 
     // Normalize the impl signature with fresh variables for lifetime inference.
     let misc_cause = ObligationCause::misc(return_span, impl_m_def_id);
-    let impl_sig = infcx.instantiate_binder_with_fresh_vars_and_normalize_with(
+    let impl_sig = tcx.fn_sig(impl_m.def_id).instantiate_identity();
+    let impl_sig = ocx.normalize(&misc_cause, param_env, impl_sig);
+    let impl_sig = infcx.instantiate_binder_with_fresh_vars_no_ambiguous_aliases(
         return_span,
         BoundRegionConversionTime::HigherRankedType,
-        tcx.fn_sig(impl_m.def_id).instantiate_identity().skip_norm_wip(),
-        |value| ocx.normalize(&misc_cause, param_env, value),
+        impl_sig,
     );
     impl_sig.error_reported()?;
     let impl_return_ty = impl_sig.output();

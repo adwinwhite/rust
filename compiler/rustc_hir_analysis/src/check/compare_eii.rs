@@ -73,16 +73,17 @@ pub(crate) fn compare_eii_function_types<'tcx>(
     debug!(?declaration_sig);
 
     // We need to check wf of the unnormalized sig.
-    let unnormalized_external_impl_sig = infcx.instantiate_binder_with_fresh_vars_skipping_norm(
-        external_impl_span,
-        infer::BoundRegionConversionTime::HigherRankedType,
-        tcx.fn_sig(external_impl)
-            .instantiate(
-                tcx,
-                infcx.fresh_args_for_item(external_impl_span, external_impl.to_def_id()),
-            )
-            .skip_norm_wip(),
-    );
+    let unnormalized_external_impl_sig = infcx
+        .instantiate_binder_with_fresh_vars_no_ambiguous_aliases(
+            external_impl_span,
+            infer::BoundRegionConversionTime::HigherRankedType,
+            tcx.fn_sig(external_impl)
+                .instantiate(
+                    tcx,
+                    infcx.fresh_args_for_item(external_impl_span, external_impl.to_def_id()),
+                )
+                .skip_norm_wip(),
+        );
     let external_impl_sig =
         ocx.normalize(&norm_cause, param_env, Unnormalized::new(unnormalized_external_impl_sig));
 

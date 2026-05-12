@@ -1461,7 +1461,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                             && tcx.is_lang_item(def.did(), LangItem::Pin)
                             && let ty::Ref(_, _, hir::Mutability::Mut) = args.type_at(0).kind()
                             && let self_ty =
-                                self.infcx.instantiate_binder_with_fresh_vars_skipping_norm(
+                                self.infcx.instantiate_binder_with_fresh_vars_no_ambiguous_aliases(
                                     fn_call_span,
                                     BoundRegionConversionTime::FnCall,
                                     tcx.fn_sig(method_did)

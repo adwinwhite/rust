@@ -1356,20 +1356,32 @@ impl<'tcx> InferCtxt<'tcx> {
         }
     }
 
-    pub fn instantiate_binder_with_fresh_vars_and_normalize_with<T, F>(
+    pub fn instantiate_binder_with_fresh_vars_renormalize_ambiguous_aliases_with<T, F>(
         &self,
         span: Span,
         lbrct: BoundRegionConversionTime,
         value: ty::Binder<'tcx, T>,
-        mut normalize: F,
+        mut renormalize_ambig: F,
     ) -> T
     where
         T: TypeFoldable<TyCtxt<'tcx>> + Copy,
-        F: FnMut(ty::Unnormalized<'tcx, T>) -> T,
+        F: FnMut(T) -> T,
     {
-        let instantiated =
-            self.instantiate_binder_with_fresh_vars_skipping_norm(span, lbrct, value);
-        normalize(ty::Unnormalized::new(instantiated))
+        let instantiated = self.instantiate_binder_with_fresh_vars(span, lbrct, value);
+        renormalize_ambig(instantiated)
+    }
+
+    pub fn instantiate_binder_with_fresh_vars_no_ambiguous_aliases<T>(
+        &self,
+        span: Span,
+        lbrct: BoundRegionConversionTime,
+        value: ty::Binder<'tcx, T>,
+    ) -> T
+    where
+        T: TypeFoldable<TyCtxt<'tcx>> + Copy,
+    {
+        debug_assert!(!value.has_ambiguous_aliases());
+        self.instantiate_binder_with_fresh_vars(span, lbrct, value)
     }
 
     // Instantiates the bound variables in a given binder with fresh inference
@@ -1379,7 +1391,9 @@ impl<'tcx> InferCtxt<'tcx> {
     // variables (e.g. during a method call). If there isn't a [`BoundRegionConversionTime`]
     // that corresponds to your use case, consider whether or not you should
     // use [`InferCtxt::enter_forall`] instead.
-    pub fn instantiate_binder_with_fresh_vars_skipping_norm<T>(
+    //
+    // You shouldn't use this method directly. Have a look at its wrappers.
+    pub fn instantiate_binder_with_fresh_vars<T>(
         &self,
         span: Span,
         lbrct: BoundRegionConversionTime,

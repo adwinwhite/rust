@@ -49,23 +49,20 @@ impl<'tcx> At<'_, 'tcx> {
     /// Normalize aliases of `Ambiguous` kind in a value.
     ///
     /// We should use this after instantiating binders to improve perf.
-    /// For the old solver, it's the same as `normalize`.
-    //
-    // FIXME: how to share inner method on this extension trait?
-    fn normalize_ambiguous_only<T: TypeFoldable<TyCtxt<'tcx>>>(
+    fn renormalize_ambiguous_aliases<T: TypeFoldable<TyCtxt<'tcx>>>(
         &self,
-        value: Unnormalized<'tcx, T>,
+        value: T,
     ) -> InferOk<'tcx, T> {
         if self.infcx.next_trait_solver() {
-            let Normalized { value, obligations } =
-                crate::solve::normalize(*self, value, NormalizationScope::AmbiguousAlias);
+            let Normalized { value, obligations } = crate::solve::normalize(
+                *self,
+                Unnormalized::new(value),
+                NormalizationScope::AmbiguousAlias,
+            );
             InferOk { value, obligations }
         } else {
-            let value = value.skip_normalization();
-            let mut selcx = SelectionContext::new(self.infcx);
-            let Normalized { value, obligations } =
-                normalize_with_depth(&mut selcx, self.param_env, self.cause.clone(), 0, value);
-            InferOk { value, obligations }
+            // We won't have ambiguous aliases in old solver so no-op.
+            InferOk { value, obligations: Default::default() }
         }
     }
 

@@ -1048,7 +1048,7 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                             && let Some(target_sig) = target_sig.no_bound_vars()
                         {
                             let src_sig =
-                                self.infcx.instantiate_binder_with_fresh_vars_skipping_norm(
+                                self.infcx.instantiate_binder_with_fresh_vars_no_ambiguous_aliases(
                                     span,
                                     BoundRegionConversionTime::HigherRankedType,
                                     src_sig,
@@ -1647,11 +1647,12 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                 let ty::UnsafeBinder(binder_ty) = *ty.kind() else {
                     unreachable!();
                 };
-                let expected_ty = self.infcx.instantiate_binder_with_fresh_vars_skipping_norm(
-                    self.body().source_info(location).span,
-                    BoundRegionConversionTime::HigherRankedType,
-                    binder_ty.into(),
-                );
+                let expected_ty =
+                    self.infcx.instantiate_binder_with_fresh_vars_no_ambiguous_aliases(
+                        self.body().source_info(location).span,
+                        BoundRegionConversionTime::HigherRankedType,
+                        binder_ty.into(),
+                    );
                 self.sub_types(
                     operand_ty,
                     expected_ty,
@@ -1888,7 +1889,7 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                 let ty::UnsafeBinder(binder_ty) = *base_ty.ty.kind() else {
                     unreachable!();
                 };
-                let found_ty = self.infcx.instantiate_binder_with_fresh_vars_skipping_norm(
+                let found_ty = self.infcx.instantiate_binder_with_fresh_vars_no_ambiguous_aliases(
                     self.body.source_info(location).span,
                     BoundRegionConversionTime::HigherRankedType,
                     binder_ty.into(),
