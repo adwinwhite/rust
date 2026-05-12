@@ -536,7 +536,7 @@ impl<I: Interner> ExistentialProjection<I> {
         projection_predicate.projection_term.args.type_at(0);
 
         Self {
-            def_id: projection_predicate.def_id(interner),
+            def_id: projection_predicate.def_id(),
             args: interner.mk_args(&projection_predicate.projection_term.args.as_slice()[1..]),
             term: projection_predicate.term,
             use_existential_projection_new_instead: (),
@@ -599,8 +599,8 @@ pub enum AliasTermKind<I: Interner> {
     /// This is an optimization for binder renormalization and is only used in the
     /// next solver. See `NormalizationFolder`.
     ///
-    /// The def_id and args are the same as the original alias.
-    AmbiguousTy { def_id: I::DefId },
+    /// The original alias is stored in the first generic arg.
+    AmbiguousTy,
 
     /// An unevaluated anonymous constants.
     UnevaluatedConst { def_id: I::UnevaluatedConstId },
@@ -623,7 +623,7 @@ impl<I: Interner> AliasTermKind<I> {
             AliasTermKind::FreeTy { .. } => "type alias",
             AliasTermKind::FreeConst { .. } => "unevaluated constant",
             AliasTermKind::UnevaluatedConst { .. } => "unevaluated constant",
-            AliasTermKind::AmbiguousTy { .. } => "ambiguous alias type",
+            AliasTermKind::AmbiguousTy => "ambiguous alias type",
         }
     }
 
@@ -633,7 +633,7 @@ impl<I: Interner> AliasTermKind<I> {
             | AliasTermKind::InherentTy { .. }
             | AliasTermKind::OpaqueTy { .. }
             | AliasTermKind::FreeTy { .. }
-            | AliasTermKind::AmbiguousTy { .. } => true,
+            | AliasTermKind::AmbiguousTy => true,
 
             AliasTermKind::UnevaluatedConst { .. }
             | AliasTermKind::ProjectionConst { .. }
@@ -649,7 +649,7 @@ impl<I: Interner> AliasTermKind<I> {
             AliasTermKind::InherentTy { def_id } => def_id.into(),
             AliasTermKind::OpaqueTy { def_id } => def_id.into(),
             AliasTermKind::FreeTy { def_id } => def_id.into(),
-            AliasTermKind::AmbiguousTy { def_id } => def_id.into(),
+            AliasTermKind::AmbiguousTy => todo!("this method is expected to be removed"),
             AliasTermKind::UnevaluatedConst { def_id } => def_id.into(),
             AliasTermKind::ProjectionConst { def_id } => def_id.into(),
             AliasTermKind::FreeConst { def_id } => def_id.into(),
@@ -658,9 +658,12 @@ impl<I: Interner> AliasTermKind<I> {
     }
 
     // Convert `AmbiguousTy` into its original kind.
-    pub fn reveal_ambiguous(self, interner: I) -> Self {
-        if let AliasTermKind::AmbiguousTy { def_id } = self {
-            interner.alias_term_kind_from_def_id(def_id)
+    pub fn reveal_ambiguous(self, args: I::GenericArgs) -> Self {
+        if let AliasTermKind::AmbiguousTy = self {
+            let ty::Alias(ty::AliasTy { kind, .. }) = args.type_at(0).kind() else {
+                unreachable!()
+            };
+            kind.into()
         } else {
             self
         }
@@ -674,7 +677,7 @@ impl<I: Interner> From<ty::AliasTyKind<I>> for AliasTermKind<I> {
             ty::Opaque { def_id } => AliasTermKind::OpaqueTy { def_id },
             ty::Free { def_id } => AliasTermKind::FreeTy { def_id },
             ty::Inherent { def_id } => AliasTermKind::InherentTy { def_id },
-            ty::Ambiguous { def_id } => AliasTermKind::AmbiguousTy { def_id },
+            ty::Ambiguous => AliasTermKind::AmbiguousTy,
         }
     }
 }
@@ -720,7 +723,11 @@ impl<I: Interner> AliasTerm<I> {
         kind: AliasTermKind<I>,
         args: I::GenericArgs,
     ) -> AliasTerm<I> {
-        interner.debug_assert_args_compatible(kind.def_id(), args);
+        // FIXME: skipping args compatibility check for `Ambiguous`.
+        // Should be fixed with the removal the `def_id` method .
+        if !matches!(kind, AliasTermKind::AmbiguousTy) {
+            interner.debug_assert_args_compatible(kind.def_id(), args);
+        }
         AliasTerm { kind, args, _use_alias_term_new_instead: () }
     }
 
@@ -749,7 +756,7 @@ impl<I: Interner> AliasTerm<I> {
             AliasTermKind::InherentTy { def_id } => AliasTyKind::Inherent { def_id },
             AliasTermKind::OpaqueTy { def_id } => AliasTyKind::Opaque { def_id },
             AliasTermKind::FreeTy { def_id } => AliasTyKind::Free { def_id },
-            AliasTermKind::AmbiguousTy { def_id } => AliasTyKind::Ambiguous { def_id },
+            AliasTermKind::AmbiguousTy => AliasTyKind::Ambiguous,
             kind @ (AliasTermKind::InherentConst { .. }
             | AliasTermKind::FreeConst { .. }
             | AliasTermKind::UnevaluatedConst { .. }
@@ -770,7 +777,7 @@ impl<I: Interner> AliasTerm<I> {
             | AliasTermKind::InherentTy { .. }
             | AliasTermKind::OpaqueTy { .. }
             | AliasTermKind::FreeTy { .. }
-            | AliasTermKind::AmbiguousTy { .. }) => {
+            | AliasTermKind::AmbiguousTy) => {
                 panic!("Cannot turn `{}` into `UnevaluatedConst`", kind.descr())
             }
         };
@@ -801,7 +808,7 @@ impl<I: Interner> AliasTerm<I> {
             AliasTermKind::InherentTy { def_id } => ty::Inherent { def_id },
             AliasTermKind::OpaqueTy { def_id } => ty::Opaque { def_id },
             AliasTermKind::FreeTy { def_id } => ty::Free { def_id },
-            AliasTermKind::AmbiguousTy { def_id } => ty::Ambiguous { def_id },
+            AliasTermKind::AmbiguousTy => ty::Ambiguous,
         };
 
         Ty::new_alias(interner, ty::AliasTy::new_from_args(interner, alias_ty_kind, self.args))
@@ -827,8 +834,8 @@ impl<I: Interner> AliasTerm<I> {
         )
     }
 
-    fn projection_def_id(self, interner: I) -> Option<I::TraitAssocTermId> {
-        match self.kind.reveal_ambiguous(interner) {
+    fn projection_def_id(self) -> Option<I::TraitAssocTermId> {
+        match self.kind.reveal_ambiguous(self.args) {
             AliasTermKind::ProjectionTy { def_id } => Some(def_id.into()),
             AliasTermKind::ProjectionConst { def_id } => Some(def_id.into()),
             AliasTermKind::InherentTy { .. }
@@ -837,16 +844,16 @@ impl<I: Interner> AliasTerm<I> {
             | AliasTermKind::UnevaluatedConst { .. }
             | AliasTermKind::FreeConst { .. }
             | AliasTermKind::InherentConst { .. } => None,
-            AliasTermKind::AmbiguousTy { .. } => unreachable!(),
+            AliasTermKind::AmbiguousTy => unreachable!(),
         }
     }
 
-    fn expect_projection_def_id(self, interner: I) -> I::TraitAssocTermId {
-        self.projection_def_id(interner).expect("expected a projection")
+    fn expect_projection_def_id(self) -> I::TraitAssocTermId {
+        self.projection_def_id().expect("expected a projection")
     }
 
     pub fn trait_def_id(self, interner: I) -> I::TraitId {
-        interner.projection_parent(self.expect_projection_def_id(interner))
+        interner.projection_parent(self.expect_projection_def_id())
     }
 
     /// Extracts the underlying trait reference and own args from this projection.
@@ -854,8 +861,7 @@ impl<I: Interner> AliasTerm<I> {
     /// then this function would return a `T: StreamingIterator` trait reference and
     /// `['a]` as the own args.
     pub fn trait_ref_and_own_args(self, interner: I) -> (TraitRef<I>, I::GenericArgsSlice) {
-        interner
-            .trait_ref_and_own_args_for_alias(self.expect_projection_def_id(interner), self.args)
+        interner.trait_ref_and_own_args_for_alias(self.expect_projection_def_id(), self.args)
     }
 
     /// Extracts the underlying trait reference from this projection.
@@ -953,8 +959,8 @@ impl<I: Interner> ProjectionPredicate<I> {
         self.projection_term.trait_def_id(interner)
     }
 
-    pub fn def_id(self, interner: I) -> I::TraitAssocTermId {
-        self.projection_term.expect_projection_def_id(interner)
+    pub fn def_id(self) -> I::TraitAssocTermId {
+        self.projection_term.expect_projection_def_id()
     }
 }
 

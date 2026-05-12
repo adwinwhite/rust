@@ -819,65 +819,64 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
                 }
             }
             ty::Foreign(def_id) => self.print_def_path(def_id, &[])?,
+            ty::Alias(ty::AliasTy { kind: ty::Ambiguous, args, .. }) => {
+                self.pretty_print_type(args.type_at(0))?
+            }
+            ty::Alias(
+                ref data @ ty::AliasTy {
+                    kind: ty::Projection { .. } | ty::Inherent { .. } | ty::Free { .. },
+                    ..
+                },
+            ) => data.print(self)?,
             ty::Placeholder(placeholder) => placeholder.print(self)?,
-            ty::Alias(ref data @ ty::AliasTy { kind, args, .. }) => match kind
-                .reveal_ambiguous(self.tcx())
-            {
-                ty::Projection { .. }
-                | ty::Inherent { .. }
-                | ty::Free { .. }
-                | ty::Ambiguous { .. } => data.print(self)?,
-                ty::Opaque { def_id } => {
-                    // We use verbose printing in 'NO_QUERIES' mode, to
-                    // avoid needing to call `predicates_of`. This should
-                    // only affect certain debug messages (e.g. messages printed
-                    // from `rustc_middle::ty` during the computation of `tcx.predicates_of`),
-                    // and should have no effect on any compiler output.
-                    // [Unless `-Zverbose-internals` is used, e.g. in the output of
-                    // `tests/ui/nll/ty-outlives/impl-trait-captures.rs`, for
-                    // example.]
-                    if self.should_print_verbose() {
-                        // FIXME(eddyb) print this with `print_def_path`.
-                        write!(self, "Opaque({:?}, {})", def_id, args.print_as_list())?;
+            ty::Alias(ty::AliasTy { kind: ty::Opaque { def_id }, args, .. }) => {
+                // We use verbose printing in 'NO_QUERIES' mode, to
+                // avoid needing to call `predicates_of`. This should
+                // only affect certain debug messages (e.g. messages printed
+                // from `rustc_middle::ty` during the computation of `tcx.predicates_of`),
+                // and should have no effect on any compiler output.
+                // [Unless `-Zverbose-internals` is used, e.g. in the output of
+                // `tests/ui/nll/ty-outlives/impl-trait-captures.rs`, for
+                // example.]
+                if self.should_print_verbose() {
+                    // FIXME(eddyb) print this with `print_def_path`.
+                    write!(self, "Opaque({:?}, {})", def_id, args.print_as_list())?;
+                    return Ok(());
+                }
+
+                let parent = self.tcx().parent(def_id);
+                match self.tcx().def_kind(parent) {
+                    DefKind::TyAlias | DefKind::AssocTy => {
+                        // NOTE: I know we should check for NO_QUERIES here, but it's alright.
+                        // `type_of` on a type alias or assoc type should never cause a cycle.
+                        if let ty::Alias(ty::AliasTy { kind: ty::Opaque { def_id: d }, .. }) = *self
+                            .tcx()
+                            .type_of(parent)
+                            .instantiate_identity()
+                            .skip_norm_wip()
+                            .kind()
+                        {
+                            if d == def_id {
+                                // If the type alias directly starts with the `impl` of the
+                                // opaque type we're printing, then skip the `::{opaque#1}`.
+                                self.print_def_path(parent, args)?;
+                                return Ok(());
+                            }
+                        }
+                        // Complex opaque type, e.g. `type Foo = (i32, impl Debug);`
+                        self.print_def_path(def_id, args)?;
                         return Ok(());
                     }
-
-                    let parent = self.tcx().parent(def_id);
-                    match self.tcx().def_kind(parent) {
-                        DefKind::TyAlias | DefKind::AssocTy => {
-                            // NOTE: I know we should check for NO_QUERIES here, but it's alright.
-                            // `type_of` on a type alias or assoc type should never cause a cycle.
-                            if let ty::Alias(ty::AliasTy {
-                                kind: ty::Opaque { def_id: d }, ..
-                            }) = *self
-                                .tcx()
-                                .type_of(parent)
-                                .instantiate_identity()
-                                .skip_norm_wip()
-                                .kind()
-                            {
-                                if d == def_id {
-                                    // If the type alias directly starts with the `impl` of the
-                                    // opaque type we're printing, then skip the `::{opaque#1}`.
-                                    self.print_def_path(parent, args)?;
-                                    return Ok(());
-                                }
-                            }
-                            // Complex opaque type, e.g. `type Foo = (i32, impl Debug);`
-                            self.print_def_path(def_id, args)?;
+                    _ => {
+                        if with_reduced_queries() {
+                            self.print_def_path(def_id, &[])?;
                             return Ok(());
-                        }
-                        _ => {
-                            if with_reduced_queries() {
-                                self.print_def_path(def_id, &[])?;
-                                return Ok(());
-                            } else {
-                                return self.pretty_print_opaque_impl_type(def_id, args);
-                            }
+                        } else {
+                            return self.pretty_print_opaque_impl_type(def_id, args);
                         }
                     }
                 }
-            },
+            }
             ty::Str => write!(self, "str")?,
             ty::Coroutine(did, args) => {
                 write!(self, "{{")?;
@@ -3159,7 +3158,7 @@ define_print! {
     }
 
     ty::AliasTerm<'tcx> {
-        match self.kind(p.tcx()).reveal_ambiguous(p.tcx()) {
+        match self.kind(p.tcx()).reveal_ambiguous(self.args) {
             ty::AliasTermKind::InherentTy {..} | ty::AliasTermKind::InherentConst {..} => p.pretty_print_inherent_projection(*self)?,
             ty::AliasTermKind::ProjectionTy { def_id } => {
                 if !(p.should_print_verbose() || with_reduced_queries())

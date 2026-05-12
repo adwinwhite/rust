@@ -1607,7 +1607,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                     if let Some(lhs) = lhs.to_alias_term(self.tcx)
                         && let ty::AliasTermKind::ProjectionTy { .. }
                         | ty::AliasTermKind::ProjectionConst { .. } =
-                            lhs.kind(self.tcx).reveal_ambiguous(self.tcx)
+                            lhs.kind.reveal_ambiguous(lhs.args)
                         && let Some((better_type_err, expected_term)) =
                             derive_better_type_error(lhs, rhs)
                     {
@@ -1618,7 +1618,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                     } else if let Some(rhs) = rhs.to_alias_term(self.tcx)
                         && let ty::AliasTermKind::ProjectionTy { .. }
                         | ty::AliasTermKind::ProjectionConst { .. } =
-                            rhs.kind(self.tcx).reveal_ambiguous(self.tcx)
+                            rhs.kind.reveal_ambiguous(rhs.args)
                         && let Some((better_type_err, expected_term)) =
                             derive_better_type_error(rhs, lhs)
                     {
@@ -1697,11 +1697,9 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                     return None;
                 };
 
-                let Ok(node) = specialization_graph::assoc_def(
-                    self.tcx,
-                    impl_data.impl_def_id,
-                    proj.def_id(self.tcx),
-                ) else {
+                let Ok(node) =
+                    specialization_graph::assoc_def(self.tcx, impl_data.impl_def_id, proj.def_id())
+                else {
                     return None;
                 };
 

@@ -217,26 +217,16 @@ where
                     self.cx(),
                     ty::AliasTy::new_from_args(
                         self.cx(),
-                        ty::AliasTyKind::Ambiguous { def_id: alias_ty.kind.def_id() },
-                        alias_ty.args,
+                        ty::AliasTyKind::Ambiguous,
+                        self.cx().mk_args(&[normalized_ty.into()]),
                     ),
                 ))
             } else {
                 Ok(normalized_ty)
             }
         } else {
-            let alias = if let ty::Ambiguous { def_id } = alias_ty.kind {
-                I::Ty::new_alias(
-                    self.cx(),
-                    ty::AliasTy::new_from_args(
-                        self.cx(),
-                        ty::AliasTyKind::new_from_def_id(self.cx(), def_id),
-                        alias_ty.args,
-                    ),
-                )
-            } else {
-                ty
-            };
+            let alias =
+                if let ty::Ambiguous = alias_ty.kind { alias_ty.args.type_at(0) } else { ty };
             Ok(ensure_sufficient_stack(|| {
                 self.normalize_alias_term(alias.into(), HasEscapingBoundVars::No)
             })?
@@ -354,20 +344,12 @@ where
         // With eager normalization, we should normalize the args of alias before
         // normalizing the alias itself.
         let ty = ty.try_super_fold_with(self)?;
-        let ty::Alias(ty::AliasTy { kind: ty::AliasTyKind::Ambiguous { def_id }, args, .. }) =
-            ty.kind()
+        let ty::Alias(ty::AliasTy { kind: ty::AliasTyKind::Ambiguous, args, .. }) = ty.kind()
         else {
             return Ok(ty);
         };
 
-        let original_alias = I::Ty::new_alias(
-            self.cx(),
-            ty::AliasTy::new_from_args(
-                self.cx(),
-                ty::AliasTyKind::new_from_def_id(self.cx(), def_id),
-                args,
-            ),
-        );
+        let original_alias = args.type_at(0);
         Ok(ensure_sufficient_stack(|| self.normalize_alias_term(original_alias.into()))?
             .expect_ty())
     }

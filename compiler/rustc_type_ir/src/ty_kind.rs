@@ -69,8 +69,8 @@ pub enum AliasTyKind<I: Interner> {
     /// This is an optimization for binder renormalization and is only used in the
     /// next solver. See `NormalizationFolder`.
     ///
-    /// The def_id and args are the same as the original alias.
-    Ambiguous { def_id: I::DefId },
+    /// The original alias is stored in the first generic arg.
+    Ambiguous,
 }
 
 impl<I: Interner> AliasTyKind<I> {
@@ -94,14 +94,18 @@ impl<I: Interner> AliasTyKind<I> {
             AliasTyKind::Inherent { def_id } => def_id.into(),
             AliasTyKind::Opaque { def_id } => def_id.into(),
             AliasTyKind::Free { def_id } => def_id.into(),
-            AliasTyKind::Ambiguous { def_id } => def_id.into(),
+            // FIXME: in the meantime, We can `reveal_ambiguous` and call this method?
+            AliasTyKind::Ambiguous => todo!("this method is expected to be removed"),
         }
     }
 
     // Convert `Ambiguous` into its original kind.
-    pub fn reveal_ambiguous(self, interner: I) -> Self {
-        if let AliasTyKind::Ambiguous { def_id } = self {
-            interner.alias_ty_kind_from_def_id(def_id)
+    pub fn reveal_ambiguous(self, args: I::GenericArgs) -> Self {
+        if let AliasTyKind::Ambiguous = self {
+            let ty::Alias(ty::AliasTy { kind, .. }) = args.type_at(0).kind() else {
+                unreachable!()
+            };
+            kind
         } else {
             self
         }
