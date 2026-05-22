@@ -323,7 +323,7 @@ impl<'tcx> NonCopyConst<'tcx> {
                         IsFreeze::from_fields(tys.iter().map(|ty| self.is_ty_freeze(tcx, typing_env, ty)))
                     },
                     // Treat type parameters as though they were `Freeze`.
-                    ty::Param(_) | ty::Alias(..) => return IsFreeze::Yes,
+                    ty::Param(_) | ty::Alias(_, ..) => return IsFreeze::Yes,
                     // TODO: check other types.
                     _ => {
                         *e = IsFreeze::No;
@@ -904,6 +904,7 @@ impl<'tcx> TypeFolder<TyCtxt<'tcx>> for ReplaceAssocFolder<'tcx> {
 
     fn fold_ty(&mut self, ty: Ty<'tcx>) -> Ty<'tcx> {
         if let ty::Alias(
+            _,
             ty @ ty::AliasTy {
                 kind: ty::Projection { .. },
                 ..
