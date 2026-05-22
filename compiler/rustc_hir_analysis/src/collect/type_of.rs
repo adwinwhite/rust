@@ -45,9 +45,13 @@ pub(super) fn type_of(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::EarlyBinder<'_
         Some(ty::ImplTraitInTraitData::Trait { opaque_def_id, .. }) => {
             return ty::EarlyBinder::bind(Ty::new_opaque(
                 tcx,
-                opaque_def_id,
-                ty::GenericArgs::identity_for_item(tcx, opaque_def_id),
-            ));
+                Ty::new_opaque(
+                    tcx,
+                    ty::IsRigid::No,
+                    opaque_def_id,
+                    ty::GenericArgs::identity_for_item(tcx, opaque_def_id),
+                ),
+            );
         }
         None => {}
     }

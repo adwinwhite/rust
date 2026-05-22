@@ -154,8 +154,13 @@ where
         goal: Goal<I, NormalizesTo<I>>,
         term: ty::AliasTerm<I>,
     ) {
-        self.relate_rigid_alias_non_alias(goal.param_env, term, ty::Invariant, goal.predicate.term)
-            .expect("expected goal term to be fully unconstrained");
+        self.relate(
+            goal.param_env,
+            term.to_term(self.cx(), ty::IsRigid::Yes),
+            ty::Invariant,
+            goal.predicate.term,
+        )
+        .expect("expected goal term to be fully unconstrained");
     }
 }
 
@@ -743,7 +748,7 @@ where
                     .skip_norm_wip()
             }
 
-            ty::Alias(_) | ty::Param(_) | ty::Placeholder(..) => {
+            ty::Alias(ty::IsRigid::Yes, _) | ty::Param(_) | ty::Placeholder(..) => {
                 // This is the "fallback impl" for type parameters, unnormalizable projections
                 // and opaque types: If the `self_ty` is `Sized`, then the metadata is `()`.
                 // FIXME(ptr_metadata): This impl overlaps with the other impls and shouldn't
@@ -782,6 +787,7 @@ where
                 None => Ty::new_unit(cx),
                 Some(tail_ty) => Ty::new_projection(
                     cx,
+                    ty::IsRigid::No,
                     metadata_def_id,
                     [tail_ty.instantiate(cx, args).skip_norm_wip()],
                 ),
@@ -790,7 +796,9 @@ where
 
             ty::Tuple(elements) => match elements.last() {
                 None => Ty::new_unit(cx),
-                Some(tail_ty) => Ty::new_projection(cx, metadata_def_id, [tail_ty]),
+                Some(tail_ty) => {
+                    Ty::new_projection(cx, ty::IsRigid::No, metadata_def_id, [tail_ty])
+                }
             },
 
             ty::UnsafeBinder(_) => {
@@ -799,6 +807,7 @@ where
             }
 
             ty::Infer(ty::TyVar(_) | ty::FreshTy(_) | ty::FreshIntTy(_) | ty::FreshFloatTy(_))
+            | ty::Alias(ty::IsRigid::No, _)
             | ty::Bound(..) => panic!(
                 "unexpected self ty `{:?}` when normalizing `<T as Pointee>::Metadata`",
                 goal.predicate.self_ty()
@@ -1011,7 +1020,7 @@ where
             // Given an alias, parameter, or placeholder we add an impl candidate normalizing to a rigid
             // alias. In case there's a where-bound further constraining this alias it is preferred over
             // this impl candidate anyways. It's still a bit scuffed.
-            ty::Alias(_) | ty::Param(_) | ty::Placeholder(..) => {
+            ty::Alias(ty::IsRigid::Yes, _) | ty::Param(_) | ty::Placeholder(..) => {
                 return ecx.probe_builtin_trait_candidate(BuiltinImplSource::Misc).enter(|ecx| {
                     ecx.structurally_instantiate_normalizes_to_term(goal, goal.predicate.alias);
                     ecx.evaluate_added_goals_and_make_canonical_response(Certainty::Yes)
@@ -1019,6 +1028,7 @@ where
             }
 
             ty::Infer(ty::TyVar(_) | ty::FreshTy(_) | ty::FreshIntTy(_) | ty::FreshFloatTy(_))
+            | ty::Alias(ty::IsRigid::No, _)
             | ty::Bound(..) => panic!(
                 "unexpected self ty `{:?}` when normalizing `<T as DiscriminantKind>::Discriminant`",
                 goal.predicate.self_ty()

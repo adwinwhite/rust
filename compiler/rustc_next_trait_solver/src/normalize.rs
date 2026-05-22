@@ -180,7 +180,7 @@ where
         // With eager normalization, we should normalize the args of alias before
         // normalizing the alias itself.
         let ty = ty.try_super_fold_with(self)?;
-        let ty::Alias(alias_ty) = ty.kind() else { return Ok(ty) };
+        let ty::Alias(_, alias_ty) = ty.kind() else { return Ok(ty) };
 
         if ty.has_escaping_bound_vars() {
             let (alias_ty, mapped_regions, mapped_types, mapped_consts) =
@@ -219,7 +219,7 @@ where
         // With eager normalization, we should normalize the args of alias before
         // normalizing the alias itself.
         let ct = ct.try_super_fold_with(self)?;
-        let ty::ConstKind::Unevaluated(uv) = ct.kind() else { return Ok(ct) };
+        let ty::ConstKind::Unevaluated(_, uv) = ct.kind() else { return Ok(ct) };
 
         if ct.has_escaping_bound_vars() {
             let (uv, mapped_regions, mapped_types, mapped_consts) =
