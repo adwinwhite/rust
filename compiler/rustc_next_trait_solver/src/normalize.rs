@@ -6,7 +6,7 @@ use rustc_type_ir::inherent::*;
 use rustc_type_ir::{
     self as ty, AliasTerm, Binder, FallibleTypeFolder, InferConst, InferCtxtLike, InferTy,
     Interner, TypeFoldable, TypeSuperFoldable, TypeSuperVisitable, TypeVisitable, TypeVisitableExt,
-    TypeVisitor, UniverseIndex,
+    TypeVisitor, TypingMode, UniverseIndex,
 };
 use tracing::instrument;
 
@@ -177,7 +177,7 @@ where
     #[instrument(level = "trace", skip(self), ret)]
     fn try_fold_ty(&mut self, ty: I::Ty) -> Result<I::Ty, Self::Error> {
         let infcx = self.infcx;
-        if !ty.has_aliases() {
+        if !ty.has_non_rigid_aliases() {
             return Ok(ty);
         }
 
@@ -185,6 +185,21 @@ where
             return Ok(*ty);
         }
 
+        // No need to renormalize if the alias is already rigid.
+        // Note rigid opaque type in `PostAnalysis` mode can invalidate other rigid aliases
+        // as well if it's in param env.
+        if let ty::Alias(alias) = ty.kind()
+            && alias.is_rigid == ty::IsRigid::Yes
+        {
+            // We shouldn't allow rigid alias contains non-rigid types.
+            debug_assert!(!alias.has_non_rigid_aliases());
+            // FIXME: can we leak rigid opaque into its defining scope? via typing mode change?
+            debug_assert!(
+                !(ty.has_opaque_types()
+                    && matches!(infcx.typing_mode_raw(), TypingMode::PostAnalysis))
+            );
+            return Ok(ty);
+        }
         // With eager normalization, we should normalize the args of alias before
         // normalizing the alias itself.
         let folded_ty = ty.try_super_fold_with(self)?;
@@ -222,7 +237,7 @@ where
     #[instrument(level = "trace", skip(self), ret)]
     fn try_fold_const(&mut self, ct: I::Const) -> Result<I::Const, Self::Error> {
         let infcx = self.infcx;
-        if !ct.has_aliases() {
+        if !ct.has_non_rigid_aliases() {
             return Ok(ct);
         }
 

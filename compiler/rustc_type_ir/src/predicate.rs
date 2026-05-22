@@ -12,7 +12,7 @@ use crate::inherent::*;
 use crate::lift::Lift;
 use crate::upcast::{Upcast, UpcastFrom};
 use crate::visit::TypeVisitableExt as _;
-use crate::{self as ty, AliasTyKind, Interner};
+use crate::{self as ty, AliasTyKind, Interner, IsRigid};
 
 /// `A: 'region`
 #[derive_where(Clone, Hash, PartialEq, Debug; I: Interner, A)]
@@ -526,6 +526,7 @@ impl<I: Interner> ExistentialProjection<I> {
                 interner,
                 interner.alias_term_kind_from_def_id(self.def_id.into()),
                 [self_ty.into()].iter().chain(self.args.iter()),
+                IsRigid::No,
             ),
             term: self.term,
         }
@@ -685,6 +686,10 @@ pub struct AliasTerm<I: Interner> {
     #[type_visitable(ignore)]
     pub kind: AliasTermKind<I>,
 
+    #[type_foldable(identity)]
+    #[type_visitable(ignore)]
+    pub is_rigid: IsRigid,
+
     /// This field exists to prevent the creation of `AliasTerm` without using [`AliasTerm::new_from_args`].
     #[derive_where(skip(Debug))]
     _use_alias_term_new_instead: (),
@@ -697,28 +702,35 @@ impl<I: Interner> AliasTerm<I> {
         interner: I,
         kind: AliasTermKind<I>,
         args: I::GenericArgs,
+        is_rigid: IsRigid,
     ) -> AliasTerm<I> {
         interner.debug_assert_args_compatible(kind.def_id(), args);
-        AliasTerm { kind, args, _use_alias_term_new_instead: () }
+        AliasTerm { kind, args, is_rigid, _use_alias_term_new_instead: () }
     }
 
     pub fn new(
         interner: I,
         kind: AliasTermKind<I>,
         args: impl IntoIterator<Item: Into<I::GenericArg>>,
+        is_rigid: IsRigid,
     ) -> AliasTerm<I> {
         let args = interner.mk_args_from_iter(args.into_iter().map(Into::into));
-        Self::new_from_args(interner, kind, args)
+        Self::new_from_args(interner, kind, args, is_rigid)
     }
 
-    pub fn new_from_def_id(interner: I, def_id: I::DefId, args: I::GenericArgs) -> AliasTerm<I> {
+    pub fn new_from_def_id(
+        interner: I,
+        def_id: I::DefId,
+        args: I::GenericArgs,
+        is_rigid: IsRigid,
+    ) -> AliasTerm<I> {
         let kind = interner.alias_term_kind_from_def_id(def_id);
-        Self::new_from_args(interner, kind, args)
+        Self::new_from_args(interner, kind, args, is_rigid)
     }
 
     pub fn from_unevaluated_const(interner: I, ct: ty::UnevaluatedConst<I>) -> Self {
         let kind = interner.alias_term_kind_from_def_id(ct.def.into());
-        AliasTerm::new_from_args(interner, kind, ct.args)
+        AliasTerm::new_from_args(interner, kind, ct.args, IsRigid::No)
     }
 
     pub fn expect_ty(self, interner: I) -> ty::AliasTy<I> {
@@ -734,7 +746,12 @@ impl<I: Interner> AliasTerm<I> {
                 panic!("Cannot turn `{}` into `AliasTy`", kind.descr())
             }
         };
-        ty::AliasTy { kind, args: self.args, _use_alias_ty_new_instead: () }
+        ty::AliasTy {
+            kind,
+            args: self.args,
+            is_rigid: self.is_rigid,
+            _use_alias_ty_new_instead: (),
+        }
     }
 
     pub fn expect_ct(self, interner: I) -> ty::UnevaluatedConst<I> {
@@ -779,12 +796,23 @@ impl<I: Interner> AliasTerm<I> {
             AliasTermKind::FreeTy { def_id } => ty::Free { def_id },
         };
 
-        Ty::new_alias(interner, ty::AliasTy::new_from_args(interner, alias_ty_kind, self.args))
-            .into()
+        Ty::new_alias(
+            interner,
+            ty::AliasTy::new_from_args(interner, alias_ty_kind, self.args, self.is_rigid),
+        )
+        .into()
     }
 
     pub fn with_args(self, interner: I, args: I::GenericArgs) -> Self {
-        Self::new_from_args(interner, self.kind, args)
+        Self::new_from_args(interner, self.kind, args, self.is_rigid)
+    }
+
+    pub fn to_rigid(self) -> AliasTerm<I> {
+        AliasTerm { is_rigid: IsRigid::Yes, ..self }
+    }
+
+    pub fn to_non_rigid(self) -> AliasTerm<I> {
+        AliasTerm { is_rigid: IsRigid::No, ..self }
     }
 }
 
@@ -799,6 +827,7 @@ impl<I: Interner> AliasTerm<I> {
             interner,
             self.kind,
             [self_ty.into()].into_iter().chain(self.args.iter().skip(1)),
+            self.is_rigid,
         )
     }
 
@@ -880,6 +909,7 @@ impl<I: Interner> From<ty::AliasTy<I>> for AliasTerm<I> {
         AliasTerm {
             args: ty.args,
             kind: AliasTermKind::from(ty.kind),
+            is_rigid: ty.is_rigid,
             _use_alias_term_new_instead: (),
         }
     }

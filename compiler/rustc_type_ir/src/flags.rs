@@ -146,6 +146,14 @@ bitflags::bitflags! {
 
         /// Does this have a `Bound(BoundVarIndexKind::Canonical, _)`?
         const HAS_CANONICAL_BOUND         = 1 << 26;
+
+        /// Does this have a `IsRigid::Yes` for some aliases?
+        const HAS_RIGID_ALIAS         = 1 << 27;
+
+        /// Does this have a `IsRigid::No` for some aliases?
+        ///
+        /// We have both flags because both can be true at the same time.
+        const HAS_NON_RIGID_ALIAS         = 1 << 28;
     }
 }
 
@@ -302,6 +310,10 @@ impl<I: Interner> FlagComputation<I> {
                     ty::Opaque { .. } => TypeFlags::HAS_TY_OPAQUE,
                     ty::Inherent { .. } => TypeFlags::HAS_TY_INHERENT,
                 });
+                match alias.is_rigid {
+                    ty::IsRigid::Yes => self.add_flags(TypeFlags::HAS_RIGID_ALIAS),
+                    ty::IsRigid::No => self.add_flags(TypeFlags::HAS_NON_RIGID_ALIAS),
+                }
 
                 self.add_alias_ty(alias);
             }
@@ -468,6 +480,7 @@ impl<I: Interner> FlagComputation<I> {
             ty::ConstKind::Unevaluated(uv) => {
                 self.add_args(uv.args.as_slice());
                 self.add_flags(TypeFlags::HAS_CT_PROJECTION);
+                self.add_flags(TypeFlags::HAS_NON_RIGID_ALIAS);
             }
             ty::ConstKind::Infer(infer) => match infer {
                 ty::InferConst::Fresh(_) => self.add_flags(TypeFlags::HAS_CT_FRESH),

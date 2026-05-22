@@ -512,7 +512,7 @@ impl<'tcx> FallibleTypeFolder<TyCtxt<'tcx>> for ToArgRegionsFolder<'_, 'tcx> {
                         }
                     },
                 ))?;
-                ty::AliasTy::new_from_args(tcx, kind, args).to_ty(tcx)
+                ty::AliasTy::new_from_args(tcx, kind, args, ty::IsRigid::No).to_ty(tcx)
             }
 
             _ => ty.try_super_fold_with(self)?,

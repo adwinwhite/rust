@@ -1052,6 +1052,7 @@ pub fn make_projection<'tcx>(
             tcx,
             ty::AliasTyKind::new_from_def_id(tcx, assoc_item.def_id),
             args,
+            ty::IsRigid::No,
         ))
     }
     helper(

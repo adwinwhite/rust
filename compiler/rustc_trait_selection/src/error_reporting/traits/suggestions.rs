@@ -5360,7 +5360,12 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
             // This corresponds to `<ExprTy as Iterator>::Item = _`.
             let projection = ty::Binder::dummy(ty::PredicateKind::Clause(
                 ty::ClauseKind::Projection(ty::ProjectionPredicate {
-                    projection_term: ty::AliasTerm::new_from_args(self.tcx, kind.into(), args),
+                    projection_term: ty::AliasTerm::new_from_args(
+                        self.tcx,
+                        kind.into(),
+                        args,
+                        ty::IsRigid::No,
+                    ),
                     term: ty.into(),
                 }),
             ));

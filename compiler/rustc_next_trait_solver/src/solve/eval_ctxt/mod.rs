@@ -1748,13 +1748,18 @@ where
         ExternalConstraintsData { region_constraints, opaque_types, normalization_nested_goals }
     }
 
-    fn normalize<T: TypeFoldable<I>>(
+    pub(super) fn normalize<T: TypeFoldable<I>>(
         &mut self,
         source: GoalSource,
         param_env: I::ParamEnv,
         value: T,
     ) -> Result<T, NoSolutionOrRerunNonErased> {
         let value = self.delegate.resolve_vars_if_possible(value);
+
+        if !value.has_non_rigid_aliases() {
+            return Ok(value);
+        }
+
         // To drop the mutable borrow of self early.
         let infcx = self.delegate.deref();
         let mut folder = NormalizationFolder::new(infcx, vec![], |alias_term| {
