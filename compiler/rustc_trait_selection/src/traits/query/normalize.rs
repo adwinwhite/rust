@@ -256,7 +256,12 @@ impl<'a, 'tcx> FallibleTypeFolder<TyCtxt<'tcx>> for QueryNormalizer<'a, 'tcx> {
             }
 
             kind @ (ty::Projection { .. } | ty::Inherent { .. } | ty::Free { .. }) => self
-                .try_fold_free_or_assoc(ty::AliasTerm::new(self.cx(), kind.into(), data.args))?
+                .try_fold_free_or_assoc(ty::AliasTerm::new(
+                    self.cx(),
+                    kind.into(),
+                    data.args,
+                    ty::IsRigid::No,
+                ))?
                 .expect_type(),
         };
 

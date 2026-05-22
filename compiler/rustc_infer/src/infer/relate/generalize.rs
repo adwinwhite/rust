@@ -636,12 +636,15 @@ impl<'tcx> TypeRelation<TyCtxt<'tcx>> for Generalizer<'_, 'tcx> {
                 }
             }
 
-            ty::Alias(data) => match self.structurally_relate_aliases {
-                StructurallyRelateAliases::No => {
-                    self.generalize_alias_term(data.into()).map(|v| v.expect_type())
+            ty::Alias(data) if data.is_rigid == ty::IsRigid::No => {
+                match self.structurally_relate_aliases {
+                    StructurallyRelateAliases::No => {
+                        // And should we even allow non-rigid alias here?
+                        self.generalize_alias_term(data.into()).map(|v| v.expect_type())
+                    }
+                    StructurallyRelateAliases::Yes => relate::structurally_relate_tys(self, t, t),
                 }
-                StructurallyRelateAliases::Yes => relate::structurally_relate_tys(self, t, t),
-            },
+            }
 
             _ => relate::structurally_relate_tys(self, t, t),
         }?;

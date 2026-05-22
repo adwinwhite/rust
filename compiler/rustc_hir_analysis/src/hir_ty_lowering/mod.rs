@@ -1217,7 +1217,8 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
             // Type aliases defined in crates that have the
             // feature `lazy_type_alias` enabled get encoded as a type alias that normalization will
             // then actually instantiate the where bounds of.
-            let alias_ty = ty::AliasTy::new_from_args(tcx, ty::Free { def_id }, args);
+            let alias_ty =
+                ty::AliasTy::new_from_args(tcx, ty::Free { def_id }, args, ty::IsRigid::No);
             Ty::new_alias(tcx, alias_ty)
         } else {
             tcx.at(span).type_of(def_id).instantiate(tcx, args).skip_norm_wip()
@@ -1361,6 +1362,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                     tcx,
                     ty::AliasTyKind::new_from_def_id(tcx, def_id),
                     args,
+                    ty::IsRigid::No,
                 );
                 let ty = Ty::new_alias(tcx, alias_ty);
                 let ty = self.check_param_uses_if_mcg(ty, span, false);

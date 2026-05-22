@@ -1133,6 +1133,7 @@ impl<'tcx> InferCtxt<'tcx> {
                             self.tcx,
                             ty::Opaque { def_id: key.def_id.into() },
                             key.args,
+                            ty::IsRigid::No,
                         ));
                     }
                 }

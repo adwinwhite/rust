@@ -726,6 +726,10 @@ impl<'a, I: Interner> TypeFolder<I> for ArgFolder<'a, I> {
 
         match t.kind() {
             ty::Param(p) => self.ty_for_param(p, t),
+            ty::Alias(alias_ty) if alias_ty.is_rigid == ty::IsRigid::Yes => {
+                let alias_ty = alias_ty.fold_with(self);
+                I::Ty::new_alias(self.cx(), alias_ty.to_non_rigid())
+            }
             _ => t.super_fold_with(self),
         }
     }

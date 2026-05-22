@@ -2739,6 +2739,7 @@ fn param_env_with_gat_bounds<'tcx>(
                             tcx,
                             trait_ty.def_id,
                             rebased_args,
+                            ty::IsRigid::No,
                         ),
                         term: normalize_impl_ty.into(),
                     },

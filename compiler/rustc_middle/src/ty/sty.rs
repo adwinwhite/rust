@@ -523,7 +523,10 @@ impl<'tcx> Ty<'tcx> {
     #[inline]
     #[instrument(level = "debug", skip(tcx))]
     pub fn new_opaque(tcx: TyCtxt<'tcx>, def_id: DefId, args: GenericArgsRef<'tcx>) -> Ty<'tcx> {
-        Ty::new_alias(tcx, AliasTy::new_from_args(tcx, ty::Opaque { def_id }, args))
+        Ty::new_alias(
+            tcx,
+            AliasTy::new_from_args(tcx, ty::Opaque { def_id }, args, ty::IsRigid::No),
+        )
     }
 
     /// Constructs a `TyKind::Error` type with current `ErrorGuaranteed`
@@ -781,7 +784,12 @@ impl<'tcx> Ty<'tcx> {
     ) -> Ty<'tcx> {
         Ty::new_alias(
             tcx,
-            AliasTy::new_from_args(tcx, ty::Projection { def_id: item_def_id }, args),
+            AliasTy::new_from_args(
+                tcx,
+                ty::Projection { def_id: item_def_id },
+                args,
+                ty::IsRigid::No,
+            ),
         )
     }
 
@@ -791,7 +799,10 @@ impl<'tcx> Ty<'tcx> {
         item_def_id: DefId,
         args: impl IntoIterator<Item: Into<GenericArg<'tcx>>>,
     ) -> Ty<'tcx> {
-        Ty::new_alias(tcx, AliasTy::new(tcx, ty::Projection { def_id: item_def_id }, args))
+        Ty::new_alias(
+            tcx,
+            AliasTy::new(tcx, ty::Projection { def_id: item_def_id }, args, ty::IsRigid::No),
+        )
     }
 
     #[inline]

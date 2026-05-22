@@ -52,7 +52,10 @@ fn layout_of<'tcx>(
     // One that can be called after typecheck has completed and can use
     // `normalize_erasing_regions` here and another one that can be called
     // before typecheck has completed and uses `try_normalize_erasing_regions`.
-    let ty = match tcx.try_normalize_erasing_regions(typing_env, Unnormalized::new_wip(ty)) {
+    let ty = match tcx.try_normalize_erasing_regions(
+        typing_env,
+        Unnormalized::new_wip(ty::reset_rigid_aliases(tcx, ty)),
+    ) {
         Ok(t) => t,
         Err(normalization_error) => {
             return Err(tcx

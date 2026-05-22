@@ -137,8 +137,13 @@ where
         goal: Goal<I, NormalizesTo<I>>,
         term: ty::AliasTerm<I>,
     ) {
-        self.relate_rigid_alias_non_alias(goal.param_env, term, ty::Invariant, goal.predicate.term)
-            .expect("expected goal term to be fully unconstrained");
+        self.relate_rigid_alias_non_alias(
+            goal.param_env,
+            term.to_rigid(),
+            ty::Invariant,
+            goal.predicate.term,
+        )
+        .expect("expected goal term to be fully unconstrained");
     }
 }
 
@@ -401,19 +406,24 @@ where
             }
 
             // Finally we construct the actual value of the associated type.
-            let term = match goal.predicate.alias.kind {
-                ty::AliasTermKind::ProjectionTy { .. } => cx
-                    .type_of(target_item_def_id.into())
-                    .instantiate(cx, target_args)
-                    .skip_norm_wip()
-                    .into(),
+            let term = match goal.predicate.alias.kind(cx) {
+                ty::AliasTermKind::ProjectionTy { .. } => {
+                    let t = cx
+                        .type_of(target_item_def_id.into())
+                        .instantiate(cx, target_args)
+                        .skip_norm_wip();
+                    let t = ecx.normalize(GoalSource::Misc, goal.param_env, t)?;
+                    t.into()
+                }
                 ty::AliasTermKind::ProjectionConst { .. }
                     if cx.is_type_const(target_item_def_id.into()) =>
                 {
-                    cx.const_of_item(target_item_def_id.into())
+                    let c = cx
+                        .const_of_item(target_item_def_id.into())
                         .instantiate(cx, target_args)
-                        .skip_norm_wip()
-                        .into()
+                        .skip_norm_wip();
+                    let c = ecx.normalize(GoalSource::Misc, goal.param_env, c)?;
+                    c.into()
                 }
                 ty::AliasTermKind::ProjectionConst { .. } => {
                     let uv = ty::UnevaluatedConst::new(
@@ -517,6 +527,7 @@ where
                 cx,
                 goal.predicate.alias.kind,
                 [goal.predicate.self_ty(), inputs],
+                ty::IsRigid::No,
             ),
             term: output.into(),
         }
@@ -574,6 +585,7 @@ where
                     cx,
                     goal.predicate.alias.kind,
                     [goal.predicate.self_ty(), tupled_inputs_ty],
+                    ty::IsRigid::No,
                 ),
                 output_coroutine_ty.into(),
             )
@@ -587,6 +599,7 @@ where
                         tupled_inputs_ty.into(),
                         env_region.into(),
                     ],
+                    ty::IsRigid::No,
                 ),
                 output_coroutine_ty.into(),
             )
@@ -596,6 +609,7 @@ where
                     cx,
                     goal.predicate.alias.kind,
                     [goal.predicate.self_ty(), tupled_inputs_ty],
+                    ty::IsRigid::No,
                 ),
                 coroutine_return_ty.into(),
             )
@@ -798,7 +812,12 @@ where
             CandidateSource::BuiltinImpl(BuiltinImplSource::Misc),
             goal,
             ty::ProjectionPredicate {
-                projection_term: ty::AliasTerm::new(ecx.cx(), goal.predicate.alias.kind, [self_ty]),
+                projection_term: ty::AliasTerm::new(
+                    ecx.cx(),
+                    cx.alias_term_kind_from_def_id(goal.predicate.def_id()),
+                    [self_ty],
+                    ty::IsRigid::No,
+                ),
                 term,
             }
             .upcast(cx),
@@ -830,7 +849,12 @@ where
             CandidateSource::BuiltinImpl(BuiltinImplSource::Misc),
             goal,
             ty::ProjectionPredicate {
-                projection_term: ty::AliasTerm::new(ecx.cx(), goal.predicate.alias.kind, [self_ty]),
+                projection_term: ty::AliasTerm::new(
+                    ecx.cx(),
+                    cx.alias_term_kind_from_def_id(goal.predicate.def_id()),
+                    [self_ty],
+                    ty::IsRigid::No,
+                ),
                 term,
             }
             .upcast(cx),
@@ -920,6 +944,7 @@ where
                     ecx.cx(),
                     goal.predicate.alias.kind,
                     [self_ty, coroutine.resume_ty()],
+                    ty::IsRigid::No,
                 ),
                 term,
             }

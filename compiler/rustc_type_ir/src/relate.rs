@@ -219,13 +219,14 @@ impl<I: Interner> Relate<I> for ty::AliasTy<I> {
                 b.kind.def_id(),
             )))
         } else {
+            debug_assert_eq!(a.is_rigid, b.is_rigid);
             let cx = relation.cx();
             let args = if let Some(variances) = cx.opt_alias_variances(a.kind) {
                 relate_args_with_variances(relation, variances, a.args, b.args)?
             } else {
                 relate_args_invariantly(relation, a.args, b.args)?
             };
-            Ok(ty::AliasTy::new_from_args(relation.cx(), a.kind, args))
+            Ok(ty::AliasTy::new_from_args(relation.cx(), a.kind, args, a.is_rigid))
         }
     }
 }
@@ -503,7 +504,8 @@ pub fn structurally_relate_tys<I: Interner, R: TypeRelation<I>>(
         }
 
         // Alias tend to mostly already be handled downstream due to normalization.
-        (ty::Alias(a), ty::Alias(b)) => {
+        // FIXME: doubtful about allowing non rigid relating.
+        (ty::Alias(a), ty::Alias(b)) if a.is_rigid == b.is_rigid => {
             let alias_ty = relation.relate(a, b)?;
             Ok(Ty::new_alias(cx, alias_ty))
         }
