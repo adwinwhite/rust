@@ -1561,7 +1561,7 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
         }
 
         match ct.kind() {
-            ty::ConstKind::Unevaluated(ty::UnevaluatedConst { def, args }) => {
+            ty::ConstKind::Unevaluated(ty::UnevaluatedConst { def, args, .. }) => {
                 match self.tcx().def_kind(def) {
                     DefKind::Const { .. } | DefKind::AssocConst { .. } => {
                         self.pretty_print_value_path(def, args)?;

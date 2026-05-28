@@ -469,7 +469,7 @@ impl<'tcx> UnevaluatedConst<'tcx> {
     #[inline]
     pub fn shrink(self) -> ty::UnevaluatedConst<'tcx> {
         assert_eq!(self.promoted, None);
-        ty::UnevaluatedConst { def: self.def, args: self.args }
+        ty::UnevaluatedConst { def: self.def, args: self.args, is_rigid: ty::IsRigid::No }
     }
 }
 

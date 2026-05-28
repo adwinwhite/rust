@@ -77,14 +77,19 @@ impl<I: Interner> fmt::Debug for ConstKind<I> {
 pub struct UnevaluatedConst<I: Interner> {
     pub def: I::UnevaluatedConstId,
     pub args: I::GenericArgs,
+    pub is_rigid: ty::IsRigid,
 }
 
 impl<I: Interner> Eq for UnevaluatedConst<I> {}
 
 impl<I: Interner> UnevaluatedConst<I> {
     #[inline]
-    pub fn new(def: I::UnevaluatedConstId, args: I::GenericArgs) -> UnevaluatedConst<I> {
-        UnevaluatedConst { def, args }
+    pub fn new(
+        def: I::UnevaluatedConstId,
+        args: I::GenericArgs,
+        is_rigid: ty::IsRigid,
+    ) -> UnevaluatedConst<I> {
+        UnevaluatedConst { def, args, is_rigid }
     }
 }
 

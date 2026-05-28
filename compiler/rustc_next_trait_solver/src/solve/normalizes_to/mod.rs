@@ -449,6 +449,7 @@ where
                     let uv = ty::UnevaluatedConst::new(
                         target_item_def_id.into().try_into().unwrap(),
                         target_args,
+                        ty::IsRigid::No,
                     );
                     return ecx.evaluate_const_and_instantiate_normalizes_to_term(goal, uv);
                 }

@@ -730,7 +730,7 @@ impl<I: Interner> AliasTerm<I> {
 
     pub fn from_unevaluated_const(interner: I, ct: ty::UnevaluatedConst<I>) -> Self {
         let kind = interner.alias_term_kind_from_def_id(ct.def.into());
-        AliasTerm::new_from_args(interner, kind, ct.args, IsRigid::No)
+        AliasTerm::new_from_args(interner, kind, ct.args, ct.is_rigid)
     }
 
     pub fn expect_ty(self, interner: I) -> ty::AliasTy<I> {
@@ -767,7 +767,7 @@ impl<I: Interner> AliasTerm<I> {
                 panic!("Cannot turn `{}` into `UnevaluatedConst`", kind.descr())
             }
         };
-        ty::UnevaluatedConst { def, args: self.args }
+        ty::UnevaluatedConst { def, args: self.args, is_rigid: self.is_rigid }
     }
 
     // FIXME: remove this function (access the field instead)
@@ -782,7 +782,11 @@ impl<I: Interner> AliasTerm<I> {
 
     pub fn to_term(self, interner: I) -> I::Term {
         let unevaluated_const = |def_id| {
-            I::Const::new_unevaluated(interner, ty::UnevaluatedConst::new(def_id, self.args)).into()
+            I::Const::new_unevaluated(
+                interner,
+                ty::UnevaluatedConst::new(def_id, self.args, self.is_rigid),
+            )
+            .into()
         };
         let alias_ty_kind = match self.kind(interner) {
             AliasTermKind::FreeConst { def_id } => return unevaluated_const(def_id.into()),

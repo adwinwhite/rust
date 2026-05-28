@@ -593,7 +593,9 @@ pub fn structurally_relate_consts<I: Interner, R: TypeRelation<I>>(
         // While this is slightly incorrect, it shouldn't matter for `min_const_generics`
         // and is the better alternative to waiting until `generic_const_exprs` can
         // be stabilized.
-        (ty::ConstKind::Unevaluated(au), ty::ConstKind::Unevaluated(bu)) if au.def == bu.def => {
+        (ty::ConstKind::Unevaluated(au), ty::ConstKind::Unevaluated(bu))
+            if au.def == bu.def && au.is_rigid == bu.is_rigid =>
+        {
             // FIXME(mgca): remove this
             if cfg!(debug_assertions) {
                 let a_ty = cx.type_of(au.def.into()).instantiate(cx, au.args).skip_norm_wip();
@@ -607,7 +609,10 @@ pub fn structurally_relate_consts<I: Interner, R: TypeRelation<I>>(
                 au.args,
                 bu.args,
             )?;
-            return Ok(Const::new_unevaluated(cx, ty::UnevaluatedConst { def: au.def, args }));
+            return Ok(Const::new_unevaluated(
+                cx,
+                ty::UnevaluatedConst { def: au.def, args, is_rigid: au.is_rigid },
+            ));
         }
         (ty::ConstKind::Expr(ae), ty::ConstKind::Expr(be)) => {
             let expr = relation.relate(ae, be)?;
