@@ -473,6 +473,7 @@ impl<'tcx> UnevaluatedConst<'tcx> {
             tcx,
             ty::UnevaluatedConstKind::new_from_def_id(tcx, self.def),
             self.args,
+            ty::IsRigid::No,
         )
     }
 }

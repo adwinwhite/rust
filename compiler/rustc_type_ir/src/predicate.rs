@@ -734,7 +734,7 @@ impl<I: Interner> AliasTerm<I> {
 
     pub fn from_unevaluated_const(interner: I, ct: ty::UnevaluatedConst<I>) -> Self {
         let kind = interner.alias_term_kind_from_def_id(ct.def.into());
-        AliasTerm::new_from_args(interner, kind, ct.args, IsRigid::No)
+        AliasTerm::new_from_args(interner, kind, ct.args, ct.is_rigid)
     }
 
     pub fn expect_ty(self, interner: I) -> ty::AliasTy<I> {
@@ -773,7 +773,7 @@ impl<I: Interner> AliasTerm<I> {
                 panic!("Cannot turn `{}` into `UnevaluatedConst`", kind.descr())
             }
         };
-        ty::UnevaluatedConst { kind, args: self.args, _use_unevaluated_const_new_instead: () }
+        ty::UnevaluatedConst { kind, args: self.args, is_rigid: self.is_rigid, _use_unevaluated_const_new_instead: () }
     }
 
     // FIXME: replace with explicit matches
@@ -788,7 +788,7 @@ impl<I: Interner> AliasTerm<I> {
         let unevaluated_const = |kind| {
             I::Const::new_unevaluated(
                 interner,
-                ty::UnevaluatedConst::new(interner, kind, self.args),
+                ty::UnevaluatedConst::new(interner, kind, self.args, self.is_rigid),
             )
             .into()
         };

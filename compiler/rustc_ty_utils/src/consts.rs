@@ -74,6 +74,7 @@ fn recurse_build<'tcx>(
                 tcx,
                 ty::UnevaluatedConstKind::new_from_def_id(tcx, def_id),
                 args,
+                ty::IsRigid::No,
             );
             ty::Const::new_unevaluated(tcx, uneval)
         }

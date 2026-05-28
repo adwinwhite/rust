@@ -76,6 +76,7 @@ pub(crate) fn as_constant_inner<'tcx>(
                     tcx,
                     ty::UnevaluatedConstKind::new_from_def_id(tcx, def_id),
                     args,
+                    ty::IsRigid::No,
                 );
                 let ct = ty::Const::new_unevaluated(tcx, uneval);
 

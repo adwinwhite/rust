@@ -79,6 +79,7 @@ pub struct UnevaluatedConst<I: Interner> {
     #[type_visitable(ignore)]
     pub kind: UnevaluatedConstKind<I>,
     pub args: I::GenericArgs,
+    pub is_rigid: ty::IsRigid,
 
     /// This field exists to prevent the creation of `UnevaluatedConst` without using [`UnevaluatedConst::new`].
     #[derive_where(skip(Debug))]
@@ -93,9 +94,10 @@ impl<I: Interner> UnevaluatedConst<I> {
         interner: I,
         kind: UnevaluatedConstKind<I>,
         args: I::GenericArgs,
+        is_rigid: ty::IsRigid,
     ) -> UnevaluatedConst<I> {
         interner.debug_assert_args_compatible(kind.def_id(), args);
-        UnevaluatedConst { kind, args, _use_unevaluated_const_new_instead: () }
+        UnevaluatedConst { kind, args, is_rigid, _use_unevaluated_const_new_instead: () }
     }
 }
 
