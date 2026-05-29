@@ -42,7 +42,8 @@ impl<T> ProcessQueryValue<'_, T> for T {
 impl<'tcx, T> ProcessQueryValue<'tcx, ty::EarlyBinder<'tcx, T>> for T {
     #[inline(always)]
     fn process_decoded(self, _tcx: TyCtxt<'_>, _err: impl Fn() -> !) -> ty::EarlyBinder<'tcx, T> {
-        ty::EarlyBinder::bind(self)
+        // FIXME: doubtful.
+        ty::EarlyBinder::bind_no_rigid_aliases(self)
     }
 }
 

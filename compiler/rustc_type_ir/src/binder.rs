@@ -387,8 +387,15 @@ generate!(
     impl<I: Interner, T> !TypeVisitable<I> for ty::EarlyBinder<I, T> {}
 );
 
+impl<I: Interner, T: TypeFoldable<I>> EarlyBinder<I, T> {
+    pub fn bind(cx: I, value: T) -> EarlyBinder<I, T> {
+        let value = ty::reset_rigid_aliases(cx, value);
+        EarlyBinder { value, _tcx: PhantomData }
+    }
+}
+
 impl<I: Interner, T> EarlyBinder<I, T> {
-    pub fn bind(value: T) -> EarlyBinder<I, T> {
+    pub fn bind_no_rigid_aliases(value: T) -> EarlyBinder<I, T> {
         EarlyBinder { value, _tcx: PhantomData }
     }
 
@@ -647,6 +654,8 @@ impl<I: Interner, T: TypeFoldable<I>> ty::EarlyBinder<I, T> {
     where
         A: SliceLike<Item = I::GenericArg>,
     {
+        debug_assert!(!self.value.has_rigid_aliases());
+
         // Nothing to fold, so let's avoid visiting things and possibly re-hashing/equating
         // them when interning. Perf testing found this to be a modest improvement.
         // See: <https://github.com/rust-lang/rust/pull/142317>
@@ -671,6 +680,8 @@ impl<I: Interner, T: TypeFoldable<I>> ty::EarlyBinder<I, T> {
     /// - Inside of the body of `foo`, we treat `T` as a placeholder by calling
     /// `instantiate_identity` to discharge the `EarlyBinder`.
     pub fn instantiate_identity(self) -> Unnormalized<I, T> {
+        debug_assert!(!self.value.has_rigid_aliases());
+
         // FIXME(#155345): In case the bound value was already normalized, this
         // is unnecessary. We may want to track explicitly whether `EarlyBinder`
         // contains something that has been normalized already.
@@ -744,10 +755,6 @@ impl<'a, I: Interner> TypeFolder<I> for ArgFolder<'a, I> {
 
         match t.kind() {
             ty::Param(p) => self.ty_for_param(p, t),
-            ty::Alias(alias_ty) if alias_ty.is_rigid == ty::IsRigid::Yes => {
-                let alias_ty = alias_ty.fold_with(self);
-                I::Ty::new_alias(self.cx(), alias_ty.to_non_rigid())
-            }
             _ => t.super_fold_with(self),
         }
     }
