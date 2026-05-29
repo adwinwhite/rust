@@ -1756,9 +1756,10 @@ where
     ) -> Result<T, NoSolutionOrRerunNonErased> {
         let value = self.delegate.resolve_vars_if_possible(value);
 
-        if !value.has_non_rigid_aliases() {
-            return Ok(value);
-        }
+        // TODO: detect all typing env change.
+        // if !value.has_non_rigid_aliases() {
+        // return Ok(value);
+        // }
 
         // To drop the mutable borrow of self early.
         let infcx = self.delegate.deref();
