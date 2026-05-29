@@ -399,7 +399,7 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
         self,
         def_id: DefId,
     ) -> ty::EarlyBinder<'tcx, impl IntoIterator<Item = ty::Clause<'tcx>>> {
-        ty::EarlyBinder::bind(
+        ty::EarlyBinder::bind_no_rigid_aliases(
             self.predicates_of(def_id)
                 .instantiate_identity(self)
                 .predicates
@@ -412,7 +412,7 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
         self,
         def_id: DefId,
     ) -> ty::EarlyBinder<'tcx, impl IntoIterator<Item = ty::Clause<'tcx>>> {
-        ty::EarlyBinder::bind(
+        ty::EarlyBinder::bind_no_rigid_aliases(
             self.predicates_of(def_id)
                 .instantiate_own_identity()
                 .map(|(clause, _)| clause.skip_normalization()),
@@ -467,7 +467,7 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
         self,
         def_id: DefId,
     ) -> ty::EarlyBinder<'tcx, impl IntoIterator<Item = ty::Binder<'tcx, ty::TraitRef<'tcx>>>> {
-        ty::EarlyBinder::bind(
+        ty::EarlyBinder::bind_no_rigid_aliases(
             self.const_conditions(def_id)
                 .instantiate_identity(self)
                 .into_iter()
@@ -479,7 +479,7 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
         self,
         def_id: DefId,
     ) -> ty::EarlyBinder<'tcx, impl IntoIterator<Item = ty::Binder<'tcx, ty::TraitRef<'tcx>>>> {
-        ty::EarlyBinder::bind(
+        ty::EarlyBinder::bind_no_rigid_aliases(
             self.explicit_implied_const_bounds(def_id)
                 .iter_identity_copied()
                 .map(Unnormalized::skip_normalization)
