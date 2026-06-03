@@ -63,10 +63,10 @@ impl<'tcx> MutVisitor<'tcx> for PostAnalysisNormalizeVisitor<'tcx> {
         // We have to use `try_normalize_erasing_regions` here, since it's
         // possible that we visit impossible-to-satisfy where clauses here,
         // see #91745
-        if let Ok(c) = self
-            .tcx
-            .try_normalize_erasing_regions(self.typing_env, Unnormalized::new_wip(constant.const_))
-        {
+        if let Ok(c) = self.tcx.try_normalize_erasing_regions(
+            self.typing_env,
+            Unnormalized::new_wip(ty::reset_rigid_aliases(self.tcx, constant.const_)),
+        ) {
             constant.const_ = c;
         }
         self.super_const_operand(constant, location);
@@ -77,9 +77,10 @@ impl<'tcx> MutVisitor<'tcx> for PostAnalysisNormalizeVisitor<'tcx> {
         // We have to use `try_normalize_erasing_regions` here, since it's
         // possible that we visit impossible-to-satisfy where clauses here,
         // see #91745
-        if let Ok(t) =
-            self.tcx.try_normalize_erasing_regions(self.typing_env, Unnormalized::new_wip(*ty))
-        {
+        if let Ok(t) = self.tcx.try_normalize_erasing_regions(
+            self.typing_env,
+            Unnormalized::new_wip(ty::reset_rigid_aliases(self.tcx, *ty)),
+        ) {
             *ty = t;
         }
     }

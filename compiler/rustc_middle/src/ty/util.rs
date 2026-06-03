@@ -1311,8 +1311,14 @@ impl<'tcx> Ty<'tcx> {
                 // query keys used. If normalization fails, we just use `query_ty`.
                 debug_assert!(!typing_env.param_env.has_infer());
                 let query_ty = tcx
-                    .try_normalize_erasing_regions(typing_env, Unnormalized::new_wip(query_ty))
+                    .try_normalize_erasing_regions(
+                        typing_env,
+                        Unnormalized::new_wip(ty::reset_rigid_aliases(tcx, query_ty)),
+                    )
                     .unwrap_or_else(|_| tcx.erase_and_anonymize_regions(query_ty));
+                // FIXME: erased region may cause ambiguity. so the alias is not rigid anymore.
+                // realy dislike this.
+                let query_ty = ty::reset_rigid_aliases(tcx, query_ty);
 
                 tcx.needs_drop_raw(typing_env.as_query_input(query_ty))
             }
