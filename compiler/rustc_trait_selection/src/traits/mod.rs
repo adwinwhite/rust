@@ -275,6 +275,8 @@ fn do_normalize_predicates<'tcx>(
     let infcx = tcx.infer_ctxt().ignoring_regions().build(TypingMode::non_body_analysis());
     let ocx = ObligationCtxt::new_with_diagnostics(&infcx);
     let predicates = ocx.normalize(&cause, elaborated_env, Unnormalized::new_wip(predicates));
+    // FIXME: typing mode change causes rigid opaque in non body analysis invalid.
+    let predicates = ty::reset_rigid_aliases(tcx, predicates);
 
     let errors = ocx.evaluate_obligations_error_on_ambiguity();
     if !errors.is_empty() {
