@@ -59,7 +59,7 @@ impl<'tcx> ExplicitPredicatesMap<'tcx> {
                 }
             }
 
-            ty::EarlyBinder::bind_no_rigid_aliases(required_predicates)
+            ty::EarlyBinder::bind_iter(required_predicates)
         })
     }
 }

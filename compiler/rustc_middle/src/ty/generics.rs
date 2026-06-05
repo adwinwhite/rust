@@ -385,7 +385,8 @@ impl<'tcx> GenericPredicates<'tcx> {
         args: GenericArgsRef<'tcx>,
     ) -> impl Iterator<Item = (Unnormalized<'tcx, Clause<'tcx>>, Span)>
     + DoubleEndedIterator
-    + ExactSizeIterator {
+    + ExactSizeIterator
+    + Clone {
         EarlyBinder::bind_no_rigid_aliases(self.predicates).iter_instantiated_copied(tcx, args).map(
             |u| {
                 let (clause, span) = u.unzip();
@@ -398,7 +399,8 @@ impl<'tcx> GenericPredicates<'tcx> {
         self,
     ) -> impl Iterator<Item = (Unnormalized<'tcx, Clause<'tcx>>, Span)>
     + DoubleEndedIterator
-    + ExactSizeIterator {
+    + ExactSizeIterator
+    + Clone {
         EarlyBinder::bind_no_rigid_aliases(self.predicates).iter_identity_copied().map(|u| {
             let (clause, span) = u.unzip();
             (clause, span.skip_normalization())
@@ -467,7 +469,8 @@ impl<'tcx> ConstConditions<'tcx> {
         args: GenericArgsRef<'tcx>,
     ) -> impl Iterator<Item = (Unnormalized<'tcx, ty::PolyTraitRef<'tcx>>, Span)>
     + DoubleEndedIterator
-    + ExactSizeIterator {
+    + ExactSizeIterator
+    + Clone {
         EarlyBinder::bind_no_rigid_aliases(self.predicates).iter_instantiated_copied(tcx, args).map(
             |u| {
                 let (trait_ref, span) = u.unzip();
@@ -480,7 +483,8 @@ impl<'tcx> ConstConditions<'tcx> {
         self,
     ) -> impl Iterator<Item = (Unnormalized<'tcx, ty::PolyTraitRef<'tcx>>, Span)>
     + DoubleEndedIterator
-    + ExactSizeIterator {
+    + ExactSizeIterator
+    + Clone {
         EarlyBinder::bind_no_rigid_aliases(self.predicates).iter_identity_copied().map(|u| {
             let (trait_ref, span) = u.unzip();
             (trait_ref, span.skip_normalization())
