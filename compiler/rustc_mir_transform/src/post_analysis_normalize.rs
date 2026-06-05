@@ -84,4 +84,14 @@ impl<'tcx> MutVisitor<'tcx> for PostAnalysisNormalizeVisitor<'tcx> {
             *ty = t;
         }
     }
+
+    #[inline]
+    fn visit_args(&mut self, args: &mut ty::GenericArgsRef<'tcx>, _: Location) {
+        if let Ok(a) = self.tcx.try_normalize_erasing_regions(
+            self.typing_env,
+            Unnormalized::new_wip(ty::reset_rigid_aliases(self.tcx, *args)),
+        ) {
+            *args = a;
+        }
+    }
 }
