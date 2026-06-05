@@ -430,7 +430,7 @@ pub(super) fn explicit_item_bounds_with_filter(
             let opaque_ty = tcx.hir_node_by_def_id(opaque_def_id.expect_local()).expect_opaque_ty();
             let bounds =
                 associated_type_bounds(tcx, def_id, opaque_ty.bounds, opaque_ty.span, filter);
-            return ty::EarlyBinder::bind_no_rigid_aliases(bounds);
+            return ty::EarlyBinder::bind_iter(bounds);
         }
         Some(ty::ImplTraitInTraitData::Impl { .. }) => {
             span_bug!(tcx.def_span(def_id), "RPITIT in impl should not have item bounds")
@@ -486,7 +486,7 @@ pub(super) fn explicit_item_bounds_with_filter(
         node => bug!("item_bounds called on {def_id:?} => {node:?}"),
     };
 
-    ty::EarlyBinder::bind_no_rigid_aliases(bounds)
+    ty::EarlyBinder::bind_iter(bounds)
 }
 
 pub(super) fn item_bounds(tcx: TyCtxt<'_>, def_id: DefId) -> ty::EarlyBinder<'_, ty::Clauses<'_>> {

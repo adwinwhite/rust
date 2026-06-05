@@ -83,7 +83,7 @@ pub(super) fn infer_predicates(
                 predicates_added.push(item_did);
                 global_inferred_outlives.insert(
                     item_did.to_def_id(),
-                    ty::EarlyBinder::bind_no_rigid_aliases(item_required_predicates),
+                    ty::EarlyBinder::bind_iter(item_required_predicates),
                 );
             }
         }

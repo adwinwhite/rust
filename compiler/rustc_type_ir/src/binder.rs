@@ -376,7 +376,19 @@ impl<I: Interner, T: TypeFoldable<I>> EarlyBinder<I, T> {
     }
 }
 
+impl<I: Interner, T: IntoIterator<Item: TypeVisitable<I>> + Clone> EarlyBinder<I, T> {
+    pub fn bind_iter(value: T) -> EarlyBinder<I, T> {
+        #[cfg(debug_assertions)]
+        {
+            value.clone().into_iter().for_each(|v| assert!(!v.has_rigid_aliases()));
+        }
+
+        EarlyBinder { value, _tcx: PhantomData }
+    }
+}
+
 impl<I: Interner, T> EarlyBinder<I, T> {
+    // FIXME: only one use case for this.
     pub fn bind_no_rigid_aliases(value: T) -> EarlyBinder<I, T> {
         EarlyBinder { value, _tcx: PhantomData }
     }
@@ -530,6 +542,14 @@ pub struct IterInstantiatedCopied<'a, I: Interner, Iter: IntoIterator> {
     args: &'a [I::GenericArg],
 }
 
+impl<'a, I: Interner, Iter: IntoIterator<IntoIter: Clone>> Clone
+    for IterInstantiatedCopied<'a, I, Iter>
+{
+    fn clone(&self) -> IterInstantiatedCopied<'a, I, Iter> {
+        IterInstantiatedCopied { it: self.it.clone(), cx: self.cx, args: self.args }
+    }
+}
+
 impl<I: Interner, Iter: IntoIterator> Iterator for IterInstantiatedCopied<'_, I, Iter>
 where
     Iter::Item: Deref,
@@ -572,6 +592,12 @@ where
 pub struct IterIdentityCopied<I: Interner, Iter: IntoIterator> {
     it: Iter::IntoIter,
     _tcx: PhantomData<fn() -> I>,
+}
+
+impl<I: Interner, Iter: IntoIterator<IntoIter: Clone>> Clone for IterIdentityCopied<I, Iter> {
+    fn clone(&self) -> IterIdentityCopied<I, Iter> {
+        IterIdentityCopied { it: self.it.clone(), _tcx: self._tcx }
+    }
 }
 
 impl<I: Interner, Iter: IntoIterator> Iterator for IterIdentityCopied<I, Iter>
@@ -636,8 +662,6 @@ impl<I: Interner, T: TypeFoldable<I>> ty::EarlyBinder<I, T> {
     where
         A: SliceLike<Item = I::GenericArg>,
     {
-        debug_assert!(!self.value.has_rigid_aliases());
-
         // Nothing to fold, so let's avoid visiting things and possibly re-hashing/equating
         // them when interning. Perf testing found this to be a modest improvement.
         // See: <https://github.com/rust-lang/rust/pull/142317>
@@ -662,8 +686,6 @@ impl<I: Interner, T: TypeFoldable<I>> ty::EarlyBinder<I, T> {
     /// - Inside of the body of `foo`, we treat `T` as a placeholder by calling
     /// `instantiate_identity` to discharge the `EarlyBinder`.
     pub fn instantiate_identity(self) -> Unnormalized<I, T> {
-        debug_assert!(!self.value.has_rigid_aliases());
-
         // FIXME(#155345): In case the bound value was already normalized, this
         // is unnecessary. We may want to track explicitly whether `EarlyBinder`
         // contains something that has been normalized already.
