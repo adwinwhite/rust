@@ -472,6 +472,7 @@ pub struct AliasTy<I: Interner> {
 
     #[type_foldable(identity)]
     #[type_visitable(ignore)]
+    #[lift(identity)]
     pub is_rigid: IsRigid,
 
     /// This field exists to prevent the creation of `AliasTy` without using [`AliasTy::new_from_args`].

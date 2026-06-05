@@ -692,6 +692,7 @@ pub struct AliasTerm<I: Interner> {
 
     #[type_foldable(identity)]
     #[type_visitable(ignore)]
+    #[lift(identity)]
     pub is_rigid: IsRigid,
 
     /// This field exists to prevent the creation of `AliasTerm` without using [`AliasTerm::new_from_args`].
@@ -732,13 +733,8 @@ impl<I: Interner> AliasTerm<I> {
         Self::new_from_args(interner, kind, args, is_rigid)
     }
 
-    pub fn from_unevaluated_const(interner: I, ct: ty::UnevaluatedConst<I>) -> Self {
-        let kind = interner.alias_term_kind_from_def_id(ct.def.into());
-        AliasTerm::new_from_args(interner, kind, ct.args, ct.is_rigid)
-    }
-
-    pub fn expect_ty(self, interner: I) -> ty::AliasTy<I> {
-        let kind = match self.kind(interner) {
+    pub fn expect_ty(self) -> ty::AliasTy<I> {
+        let kind = match self.kind {
             AliasTermKind::ProjectionTy { def_id } => AliasTyKind::Projection { def_id },
             AliasTermKind::InherentTy { def_id } => AliasTyKind::Inherent { def_id },
             AliasTermKind::OpaqueTy { def_id } => AliasTyKind::Opaque { def_id },
@@ -773,7 +769,12 @@ impl<I: Interner> AliasTerm<I> {
                 panic!("Cannot turn `{}` into `UnevaluatedConst`", kind.descr())
             }
         };
-        ty::UnevaluatedConst { kind, args: self.args, is_rigid: self.is_rigid, _use_unevaluated_const_new_instead: () }
+        ty::UnevaluatedConst {
+            kind,
+            args: self.args,
+            is_rigid: self.is_rigid,
+            _use_unevaluated_const_new_instead: (),
+        }
     }
 
     // FIXME: replace with explicit matches
@@ -783,7 +784,11 @@ impl<I: Interner> AliasTerm<I> {
 
     pub fn to_term(self, interner: I) -> I::Term {
         let alias_ty = |kind| {
-            Ty::new_alias(interner, ty::AliasTy::new_from_args(interner, kind, self.args, self.is_rigid)).into()
+            Ty::new_alias(
+                interner,
+                ty::AliasTy::new_from_args(interner, kind, self.args, self.is_rigid),
+            )
+            .into()
         };
         let unevaluated_const = |kind| {
             I::Const::new_unevaluated(
@@ -929,6 +934,7 @@ impl<I: Interner> From<ty::UnevaluatedConst<I>> for AliasTerm<I> {
         AliasTerm {
             args: ty.args,
             kind: AliasTermKind::from(ty.kind),
+            is_rigid: ty.is_rigid,
             _use_alias_term_new_instead: (),
         }
     }

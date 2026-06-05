@@ -406,7 +406,7 @@ where
             }
 
             // Finally we construct the actual value of the associated type.
-            let term = match goal.predicate.alias.kind(cx) {
+            let term = match goal.predicate.alias.kind {
                 ty::AliasTermKind::ProjectionTy { .. } => {
                     let t = cx
                         .type_of(target_item_def_id.into())
