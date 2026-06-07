@@ -2807,7 +2807,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
         }
 
         self.probe(|_| {
-            let pred = ty::reset_rigid_aliases(self.tcx, pred);
+            let pred = ty::set_aliases_to_non_rigid(self.tcx, pred);
             let cleaned_pred =
                 pred.fold_with(&mut ParamToVarFolder { infcx: self, var_map: Default::default() });
 

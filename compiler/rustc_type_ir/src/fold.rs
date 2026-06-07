@@ -555,7 +555,7 @@ where
     }
 }
 
-pub fn reset_rigid_aliases<I: Interner, T>(cx: I, value: T) -> T
+pub fn set_aliases_to_non_rigid<I: Interner, T>(cx: I, value: T) -> T
 where
     T: TypeFoldable<I>,
 {

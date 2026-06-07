@@ -1313,12 +1313,12 @@ impl<'tcx> Ty<'tcx> {
                 let query_ty = tcx
                     .try_normalize_erasing_regions(
                         typing_env,
-                        Unnormalized::new_wip(ty::reset_rigid_aliases(tcx, query_ty)),
+                        Unnormalized::new_wip(ty::set_aliases_to_non_rigid(tcx, query_ty)),
                     )
                     .unwrap_or_else(|_| tcx.erase_and_anonymize_regions(query_ty));
                 // FIXME: erased region may cause ambiguity. so the alias is not rigid anymore.
                 // realy dislike this.
-                let query_ty = ty::reset_rigid_aliases(tcx, query_ty);
+                let query_ty = ty::set_aliases_to_non_rigid(tcx, query_ty);
 
                 tcx.needs_drop_raw(typing_env.as_query_input(query_ty))
             }

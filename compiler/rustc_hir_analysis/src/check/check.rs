@@ -2315,7 +2315,7 @@ pub(super) fn check_potentially_region_dependent_goals<'tcx>(
             infcx.next_region_var(RegionVariableOrigin::Misc(cause.span))
         });
         // FIXME: perhaps not here.
-        let predicate = ty::reset_rigid_aliases(tcx, predicate);
+        let predicate = ty::set_aliases_to_non_rigid(tcx, predicate);
         ocx.register_obligation(Obligation::new(tcx, cause.clone(), param_env, predicate));
     }
 

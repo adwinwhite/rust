@@ -54,7 +54,7 @@ fn layout_of<'tcx>(
     // before typecheck has completed and uses `try_normalize_erasing_regions`.
     let ty = match tcx.try_normalize_erasing_regions(
         typing_env,
-        Unnormalized::new_wip(ty::reset_rigid_aliases(tcx, ty)),
+        Unnormalized::new_wip(ty::set_aliases_to_non_rigid(tcx, ty)),
     ) {
         Ok(t) => t,
         Err(normalization_error) => {
