@@ -528,7 +528,6 @@ where
                 cx,
                 goal.predicate.alias.kind,
                 [goal.predicate.self_ty(), inputs],
-                ty::IsRigid::No,
             ),
             term: output.into(),
         }
@@ -586,7 +585,6 @@ where
                     cx,
                     goal.predicate.alias.kind,
                     [goal.predicate.self_ty(), tupled_inputs_ty],
-                    ty::IsRigid::No,
                 ),
                 output_coroutine_ty.into(),
             )
@@ -600,7 +598,6 @@ where
                         tupled_inputs_ty.into(),
                         env_region.into(),
                     ],
-                    ty::IsRigid::No,
                 ),
                 output_coroutine_ty.into(),
             )
@@ -610,7 +607,6 @@ where
                     cx,
                     goal.predicate.alias.kind,
                     [goal.predicate.self_ty(), tupled_inputs_ty],
-                    ty::IsRigid::No,
                 ),
                 coroutine_return_ty.into(),
             )
@@ -817,7 +813,6 @@ where
                     ecx.cx(),
                     cx.alias_term_kind_from_def_id(goal.predicate.def_id()),
                     [self_ty],
-                    ty::IsRigid::No,
                 ),
                 term,
             }
@@ -854,7 +849,6 @@ where
                     ecx.cx(),
                     cx.alias_term_kind_from_def_id(goal.predicate.def_id()),
                     [self_ty],
-                    ty::IsRigid::No,
                 ),
                 term,
             }
@@ -945,7 +939,6 @@ where
                     ecx.cx(),
                     goal.predicate.alias.kind,
                     [self_ty, coroutine.resume_ty()],
-                    ty::IsRigid::No,
                 ),
                 term,
             }

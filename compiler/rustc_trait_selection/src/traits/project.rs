@@ -1562,7 +1562,6 @@ fn confirm_builtin_candidate<'cx, 'tcx>(
             tcx,
             ty::AliasTermKind::ProjectionTy { def_id: item_def_id },
             args,
-            ty::IsRigid::No,
         ),
         term,
     };
@@ -1700,7 +1699,6 @@ fn confirm_callable_candidate<'cx, 'tcx>(
             tcx,
             ty::AliasTermKind::ProjectionTy { def_id: fn_once_output_def_id },
             trait_ref.args,
-            ty::IsRigid::No,
         ),
         term: ret_type.into(),
     });
@@ -1788,13 +1786,11 @@ fn confirm_async_closure_candidate<'cx, 'tcx>(
                     tcx,
                     obligation.predicate.kind,
                     [self_ty, sig.tupled_inputs_ty],
-                    ty::IsRigid::No,
                 ),
                 sym::CallRefFuture => ty::AliasTerm::new(
                     tcx,
                     obligation.predicate.kind,
                     [ty::GenericArg::from(self_ty), sig.tupled_inputs_ty.into(), env_region.into()],
-                    ty::IsRigid::No,
                 ),
                 name => bug!("no such associated type: {name}"),
             };
@@ -1820,7 +1816,6 @@ fn confirm_async_closure_candidate<'cx, 'tcx>(
                     tcx,
                     obligation.predicate.kind,
                     [self_ty, Ty::new_tup(tcx, sig.inputs())],
-                    ty::IsRigid::No,
                 ),
                 sym::CallRefFuture => ty::AliasTerm::new(
                     tcx,
@@ -1830,7 +1825,6 @@ fn confirm_async_closure_candidate<'cx, 'tcx>(
                         Ty::new_tup(tcx, sig.inputs()).into(),
                         env_region.into(),
                     ],
-                    ty::IsRigid::No,
                 ),
                 name => bug!("no such associated type: {name}"),
             };
@@ -1852,17 +1846,13 @@ fn confirm_async_closure_candidate<'cx, 'tcx>(
                 name => bug!("no such associated type: {name}"),
             };
             let projection_term = match item_name {
-                sym::CallOnceFuture | sym::Output => ty::AliasTerm::new(
-                    tcx,
-                    obligation.predicate.kind,
-                    [self_ty, sig.inputs()[0]],
-                    ty::IsRigid::No,
-                ),
+                sym::CallOnceFuture | sym::Output => {
+                    ty::AliasTerm::new(tcx, obligation.predicate.kind, [self_ty, sig.inputs()[0]])
+                }
                 sym::CallRefFuture => ty::AliasTerm::new(
                     tcx,
                     obligation.predicate.kind,
                     [ty::GenericArg::from(self_ty), sig.inputs()[0].into(), env_region.into()],
-                    ty::IsRigid::No,
                 ),
                 name => bug!("no such associated type: {name}"),
             };

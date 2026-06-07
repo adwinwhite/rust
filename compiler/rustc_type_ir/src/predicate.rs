@@ -515,7 +515,6 @@ impl<I: Interner> ExistentialProjection<I> {
                 interner,
                 interner.alias_term_kind_from_def_id(self.def_id.into()),
                 [self_ty.into()].iter().chain(self.args.iter()),
-                IsRigid::No,
             ),
             term: self.term,
         }
@@ -707,6 +706,15 @@ impl<I: Interner> AliasTerm<I> {
         interner: I,
         kind: AliasTermKind<I>,
         args: I::GenericArgs,
+    ) -> AliasTerm<I> {
+        interner.debug_assert_args_compatible(kind.def_id(), args);
+        AliasTerm { kind, args, is_rigid: IsRigid::No, _use_alias_term_new_instead: () }
+    }
+
+    fn new_from_args_with_rigidness(
+        interner: I,
+        kind: AliasTermKind<I>,
+        args: I::GenericArgs,
         is_rigid: IsRigid,
     ) -> AliasTerm<I> {
         interner.debug_assert_args_compatible(kind.def_id(), args);
@@ -717,20 +725,24 @@ impl<I: Interner> AliasTerm<I> {
         interner: I,
         kind: AliasTermKind<I>,
         args: impl IntoIterator<Item: Into<I::GenericArg>>,
+    ) -> AliasTerm<I> {
+        let args = interner.mk_args_from_iter(args.into_iter().map(Into::into));
+        Self::new_from_args(interner, kind, args)
+    }
+
+    fn new_with_rigidness(
+        interner: I,
+        kind: AliasTermKind<I>,
+        args: impl IntoIterator<Item: Into<I::GenericArg>>,
         is_rigid: IsRigid,
     ) -> AliasTerm<I> {
         let args = interner.mk_args_from_iter(args.into_iter().map(Into::into));
-        Self::new_from_args(interner, kind, args, is_rigid)
+        Self::new_from_args_with_rigidness(interner, kind, args, is_rigid)
     }
 
-    pub fn new_from_def_id(
-        interner: I,
-        def_id: I::DefId,
-        args: I::GenericArgs,
-        is_rigid: IsRigid,
-    ) -> AliasTerm<I> {
+    pub fn new_from_def_id(interner: I, def_id: I::DefId, args: I::GenericArgs) -> AliasTerm<I> {
         let kind = interner.alias_term_kind_from_def_id(def_id);
-        Self::new_from_args(interner, kind, args, is_rigid)
+        Self::new_from_args(interner, kind, args)
     }
 
     pub fn expect_ty(self) -> ty::AliasTy<I> {
@@ -818,7 +830,7 @@ impl<I: Interner> AliasTerm<I> {
     }
 
     pub fn with_args(self, interner: I, args: I::GenericArgs) -> Self {
-        Self::new_from_args(interner, self.kind, args, self.is_rigid)
+        Self::new_from_args_with_rigidness(interner, self.kind, args, self.is_rigid)
     }
 
     pub fn to_rigid(self) -> AliasTerm<I> {
@@ -837,7 +849,7 @@ impl<I: Interner> AliasTerm<I> {
     }
 
     pub fn with_replaced_self_ty(self, interner: I, self_ty: I::Ty) -> Self {
-        AliasTerm::new(
+        AliasTerm::new_with_rigidness(
             interner,
             self.kind,
             [self_ty.into()].into_iter().chain(self.args.iter().skip(1)),

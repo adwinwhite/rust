@@ -249,7 +249,6 @@ fn trait_object_ty<'tcx>(tcx: TyCtxt<'tcx>, poly_trait_ref: ty::PolyTraitRef<'tc
                             tcx,
                             assoc_item.def_id,
                             super_trait_ref.args,
-                            ty::IsRigid::No,
                         );
                         let term = tcx.normalize_erasing_regions(
                             ty::TypingEnv::fully_monomorphized(),

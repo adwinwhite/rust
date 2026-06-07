@@ -481,7 +481,6 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                                             tcx,
                                             assoc_item.def_id,
                                             alias_args,
-                                            ty::IsRigid::No,
                                         )
                                     });
 
