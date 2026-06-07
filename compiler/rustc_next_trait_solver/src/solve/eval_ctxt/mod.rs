@@ -1846,6 +1846,11 @@ where
     }
 
     fn fold_ty(&mut self, ty: I::Ty) -> I::Ty {
+        // FIXME: temporay perf improvement. Ideally, this folder will be removed.
+        if !ty.has_non_rigid_aliases() {
+            return ty;
+        }
+
         match ty.kind() {
             ty::Alias(..) if !ty.has_escaping_bound_vars() => {
                 let infer_ty = self.ecx.next_ty_infer();
@@ -1875,6 +1880,11 @@ where
     }
 
     fn fold_const(&mut self, ct: I::Const) -> I::Const {
+        // FIXME: temporay perf improvement. Ideally, this folder will be removed.
+        if !ct.has_non_rigid_aliases() {
+            return ct;
+        }
+
         match ct.kind() {
             ty::ConstKind::Unevaluated(..) if !ct.has_escaping_bound_vars() => {
                 let infer_ct = self.ecx.next_const_infer();
@@ -1894,7 +1904,12 @@ where
     }
 
     fn fold_predicate(&mut self, predicate: I::Predicate) -> I::Predicate {
-        if predicate.allow_normalization() { predicate.super_fold_with(self) } else { predicate }
+        // FIXME: temporay perf improvement. Ideally, this folder will be removed.
+        if predicate.allow_normalization() && predicate.has_non_rigid_aliases() {
+            predicate.super_fold_with(self)
+        } else {
+            predicate
+        }
     }
 }
 
