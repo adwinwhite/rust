@@ -15,9 +15,10 @@ use rustc_type_ir::solve::{
     RerunNonErased, RerunReason, RerunResultExt, SmallCopyList,
 };
 use rustc_type_ir::{
-    self as ty, AliasRelationDirection, CanonicalVarValues, ClauseKind, InferCtxtLike, Interner,
-    MayBeErased, OpaqueTypeKey, PredicateKind, TypeFoldable, TypeFolder, TypeSuperFoldable,
-    TypeSuperVisitable, TypeVisitable, TypeVisitableExt, TypeVisitor, TypingMode,
+    self as ty, AliasRelationDirection, AliasTermKind, CanonicalVarValues, ClauseKind,
+    InferCtxtLike, Interner, MayBeErased, OpaqueTypeKey, PredicateKind, TypeFoldable, TypeFolder,
+    TypeSuperFoldable, TypeSuperVisitable, TypeVisitable, TypeVisitableExt, TypeVisitor,
+    TypingMode,
 };
 use tracing::{Level, debug, instrument, trace, warn};
 
@@ -1080,12 +1081,12 @@ where
     }
 
     pub(super) fn next_infer_for_alias(&mut self, alias: ty::AliasTerm<I>) -> I::Term {
-        match alias.kind(self.cx()) {
+        match alias.kind {
             AliasTermKind::ProjectionTy { .. }
             | AliasTermKind::InherentTy { .. }
             | AliasTermKind::OpaqueTy { .. }
             | AliasTermKind::FreeTy { .. } => self.next_ty_infer().into(),
-            AliasTermKind::UnevaluatedConst { .. }
+            AliasTermKind::AnonConst { .. }
             | AliasTermKind::ProjectionConst { .. }
             | AliasTermKind::FreeConst { .. }
             | AliasTermKind::InherentConst { .. } => self.next_const_infer().into(),
