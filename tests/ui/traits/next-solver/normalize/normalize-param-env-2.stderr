@@ -52,14 +52,6 @@ LL | |     fn f()
 LL | | }
    | |_^ required by this bound in `A`
 
-error[E0275]: overflow evaluating the requirement `<() as A<T>>::Assoc == _`
-  --> $DIR/normalize-param-env-2.rs:24:22
-   |
-LL |         Self::Assoc: A<T>,
-   |                      ^^^^
-   |
-   = note: duplicate diagnostic emitted due to `-Z deduplicate-diagnostics=no`
-
 error[E0283]: type annotations needed
   --> $DIR/normalize-param-env-2.rs:24:22
    |
@@ -116,7 +108,7 @@ LL |     where
 LL |         Self::Assoc: A<T>,
    |                      ^^^^ required by this bound in `A::f`
 
-error: aborting due to 10 previous errors
+error: aborting due to 9 previous errors
 
 Some errors have detailed explanations: E0275, E0283.
 For more information about an error, try `rustc --explain E0275`.

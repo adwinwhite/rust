@@ -6,7 +6,6 @@
 
 type const A: () = A;
 //~^ ERROR: overflow evaluating the requirement `A == _`
-//~| ERROR: overflow evaluating the requirement `A == _`
 //~| ERROR: type annotations needed
 
 fn main() {
