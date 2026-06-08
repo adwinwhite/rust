@@ -43,10 +43,9 @@ where
     let value = value.skip_normalization();
     let value = infcx.resolve_vars_if_possible(value);
 
-    // TODO: detect all typing env change.
-    // if !value.has_non_rigid_aliases() {
-    // return Normalized { value, obligations: Default::default() };
-    // }
+    if !infcx.tcx.disable_trait_solver_fast_paths() && !value.has_non_rigid_aliases() {
+        return Normalized { value, obligations: Default::default() };
+    }
 
     let original_value = value.clone();
     let mut stalled_goals = vec![];

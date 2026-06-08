@@ -1759,10 +1759,9 @@ where
     ) -> Result<T, NoSolutionOrRerunNonErased> {
         let value = self.delegate.resolve_vars_if_possible(value);
 
-        // TODO: detect all typing env change.
-        // if !value.has_non_rigid_aliases() {
-        // return Ok(value);
-        // }
+        if !self.delegate.disable_trait_solver_fast_paths() && !value.has_non_rigid_aliases() {
+            return Ok(value);
+        }
 
         // To drop the mutable borrow of self early.
         let infcx = self.delegate.deref();
@@ -1846,8 +1845,7 @@ where
     }
 
     fn fold_ty(&mut self, ty: I::Ty) -> I::Ty {
-        // FIXME: temporay perf improvement. Ideally, this folder will be removed.
-        if !ty.has_non_rigid_aliases() {
+        if !self.ecx.delegate.disable_trait_solver_fast_paths() && !ty.has_non_rigid_aliases() {
             return ty;
         }
 
@@ -1880,8 +1878,7 @@ where
     }
 
     fn fold_const(&mut self, ct: I::Const) -> I::Const {
-        // FIXME: temporay perf improvement. Ideally, this folder will be removed.
-        if !ct.has_non_rigid_aliases() {
+        if !self.ecx.delegate.disable_trait_solver_fast_paths() && !ct.has_non_rigid_aliases() {
             return ct;
         }
 
