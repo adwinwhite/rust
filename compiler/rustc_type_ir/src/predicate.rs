@@ -725,10 +725,10 @@ impl<I: Interner> AliasTerm<I> {
         kind: AliasTermKind<I>,
         args: impl IntoIterator<Item: Into<I::GenericArg>>,
     ) -> AliasTerm<I> {
-        Self::with_args_iter_and_rigidness(interner, kind, args, IsRigid::No)
+        Self::with_rigidness(interner, kind, args, IsRigid::No)
     }
 
-    fn with_args_iter_and_rigidness(
+    fn with_rigidness(
         interner: I,
         kind: AliasTermKind<I>,
         args: impl IntoIterator<Item: Into<I::GenericArg>>,
@@ -796,7 +796,7 @@ impl<I: Interner> AliasTerm<I> {
         let alias_ty = |kind| {
             Ty::new_alias(
                 interner,
-                ty::AliasTy::new_from_args(interner, kind, self.args, self.is_rigid),
+                ty::AliasTy::with_args_and_rigidness(interner, kind, self.args, self.is_rigid),
             )
             .into()
         };
@@ -847,7 +847,7 @@ impl<I: Interner> AliasTerm<I> {
     }
 
     pub fn with_replaced_self_ty(self, interner: I, self_ty: I::Ty) -> Self {
-        AliasTerm::with_args_iter_and_rigidness(
+        AliasTerm::with_rigidness(
             interner,
             self.kind,
             [self_ty.into()].into_iter().chain(self.args.iter().skip(1)),

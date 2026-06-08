@@ -226,7 +226,7 @@ impl<I: Interner> Relate<I> for ty::AliasTy<I> {
             } else {
                 relate_args_invariantly(relation, a.args, b.args)?
             };
-            Ok(ty::AliasTy::new_from_args(relation.cx(), a.kind, args, a.is_rigid))
+            Ok(ty::AliasTy::with_args_and_rigidness(relation.cx(), a.kind, args, a.is_rigid))
         }
     }
 }

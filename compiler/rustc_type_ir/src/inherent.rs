@@ -62,12 +62,7 @@ pub trait Ty<I: Interner<Ty = Self>>:
     ) -> Self {
         Self::new_alias(
             interner,
-            ty::AliasTy::new_from_args(
-                interner,
-                ty::AliasTyKind::Projection { def_id },
-                args,
-                ty::IsRigid::No,
-            ),
+            ty::AliasTy::new_from_args(interner, ty::AliasTyKind::Projection { def_id }, args),
         )
     }
 
@@ -78,12 +73,7 @@ pub trait Ty<I: Interner<Ty = Self>>:
     ) -> Self {
         Self::new_alias(
             interner,
-            ty::AliasTy::new(
-                interner,
-                ty::AliasTyKind::Projection { def_id },
-                args,
-                ty::IsRigid::No,
-            ),
+            ty::AliasTy::new(interner, ty::AliasTyKind::Projection { def_id }, args),
         )
     }
 

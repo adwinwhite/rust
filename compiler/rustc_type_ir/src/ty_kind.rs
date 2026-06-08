@@ -483,7 +483,11 @@ pub struct AliasTy<I: Interner> {
 impl<I: Interner> Eq for AliasTy<I> {}
 
 impl<I: Interner> AliasTy<I> {
-    pub fn new_from_args(
+    pub fn new_from_args(interner: I, kind: AliasTyKind<I>, args: I::GenericArgs) -> AliasTy<I> {
+        Self::with_args_and_rigidness(interner, kind, args, IsRigid::No)
+    }
+
+    pub fn with_args_and_rigidness(
         interner: I,
         kind: AliasTyKind<I>,
         args: I::GenericArgs,
@@ -497,10 +501,18 @@ impl<I: Interner> AliasTy<I> {
         interner: I,
         kind: AliasTyKind<I>,
         args: impl IntoIterator<Item: Into<I::GenericArg>>,
+    ) -> AliasTy<I> {
+        Self::with_rigidness(interner, kind, args, IsRigid::No)
+    }
+
+    pub fn with_rigidness(
+        interner: I,
+        kind: AliasTyKind<I>,
+        args: impl IntoIterator<Item: Into<I::GenericArg>>,
         is_rigid: IsRigid,
     ) -> AliasTy<I> {
         let args = interner.mk_args_from_iter(args.into_iter().map(Into::into));
-        Self::new_from_args(interner, kind, args, is_rigid)
+        Self::with_args_and_rigidness(interner, kind, args, is_rigid)
     }
 
     /// Whether this alias type is an opaque.
@@ -529,7 +541,7 @@ impl<I: Interner> AliasTy<I> {
     }
 
     pub fn with_replaced_self_ty(self, interner: I, self_ty: I::Ty) -> Self {
-        AliasTy::new(
+        AliasTy::with_rigidness(
             interner,
             self.kind,
             [self_ty.into()].into_iter().chain(self.args.iter().skip(1)),
