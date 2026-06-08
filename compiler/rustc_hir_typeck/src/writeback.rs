@@ -749,6 +749,10 @@ impl<'cx, 'tcx> WritebackCx<'cx, 'tcx> {
         for (local_id, &fn_sig) in fcx_liberated_fn_sigs {
             let hir_id = HirId { owner: common_hir_owner, local_id };
             let fn_sig = self.resolve(fn_sig, &hir_id);
+            // Rigid aliases might be ambiguous afer erasing regions.
+            // See `tests/ui/traits/next-solver/assembly/ambiguity-due-to-uniquification-4.rs`
+            let fn_sig = ty::set_aliases_to_non_rigid(self.tcx(), fn_sig);
+
             self.typeck_results.liberated_fn_sigs_mut().insert(hir_id, fn_sig);
         }
     }
