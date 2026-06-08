@@ -9,7 +9,7 @@ use rustc_middle::ty::{
     self, Binder, Flags, Ty, TyCtxt, TypeFoldable, TypeFolder, TypeSuperFoldable, TypeVisitableExt,
     UniverseIndex, Unnormalized,
 };
-use rustc_next_trait_solver::normalize::NormalizationFolder;
+use rustc_next_trait_solver::normalize::{NormalizationFolder, NormalizationWasAmbiguous};
 use rustc_next_trait_solver::solve::SolverDelegateEvalExt;
 
 use super::{FulfillmentCtxt, NextSolverError};
@@ -65,8 +65,7 @@ where
         Ok((normalized, normalization_was_ambiguous))
     });
     if let Ok(value) = value.try_fold_with(&mut folder) {
-        let obligations = folder
-            .stalled_goals()
+        let obligations = stalled_goals
             .into_iter()
             .map(|goal| {
                 Obligation::new(infcx.tcx, at.cause.clone(), goal.param_env, goal.predicate)
