@@ -96,6 +96,15 @@ impl<I: Interner> UnevaluatedConst<I> {
         interner: I,
         kind: UnevaluatedConstKind<I>,
         args: I::GenericArgs,
+    ) -> UnevaluatedConst<I> {
+        Self::with_rigidness(interner, kind, args, ty::IsRigid::No)
+    }
+
+    #[inline]
+    pub fn with_rigidness(
+        interner: I,
+        kind: UnevaluatedConstKind<I>,
+        args: I::GenericArgs,
         is_rigid: ty::IsRigid,
     ) -> UnevaluatedConst<I> {
         interner.debug_assert_args_compatible(kind.def_id(), args);

@@ -718,7 +718,7 @@ pub fn try_evaluate_const<'tcx>(
                 }
             };
 
-            let uv = ty::UnevaluatedConst::new(tcx, uv.kind, args, ty::IsRigid::No);
+            let uv = ty::UnevaluatedConst::new(tcx, uv.kind, args);
             let erased_uv = tcx.erase_and_anonymize_regions(uv);
 
             use rustc_middle::mir::interpret::ErrorHandled;

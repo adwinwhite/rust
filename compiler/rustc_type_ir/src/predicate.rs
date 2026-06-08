@@ -805,7 +805,7 @@ impl<I: Interner> AliasTerm<I> {
         let unevaluated_const = |kind| {
             I::Const::new_unevaluated(
                 interner,
-                ty::UnevaluatedConst::new(interner, kind, self.args, self.is_rigid),
+                ty::UnevaluatedConst::with_rigidness(interner, kind, self.args, self.is_rigid),
             )
             .into()
         };

@@ -1406,7 +1406,6 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                         tcx,
                         ty::UnevaluatedConstKind::new_from_def_id(tcx, def_id),
                         args,
-                        ty::IsRigid::No,
                     ),
                 );
                 let ct = self.check_param_uses_if_mcg(ct, span, false);
@@ -1864,7 +1863,6 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
             tcx,
             ty::UnevaluatedConstKind::new_from_def_id(tcx, item_def_id),
             item_args,
-            ty::IsRigid::No,
         );
         Ok(Const::new_unevaluated(tcx, uv))
     }
@@ -2723,7 +2721,6 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                         tcx,
                         ty::UnevaluatedConstKind::new_from_def_id(tcx, did),
                         args,
-                        ty::IsRigid::No,
                     ),
                 )
             }
@@ -2853,7 +2850,6 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                     tcx,
                     ty::UnevaluatedConstKind::Anon { def_id: anon.def_id.to_def_id() },
                     ty::GenericArgs::identity_for_item(tcx, anon.def_id.to_def_id()),
-                    ty::IsRigid::No,
                 ),
             ),
         }

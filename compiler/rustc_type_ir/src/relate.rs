@@ -611,7 +611,7 @@ pub fn structurally_relate_consts<I: Interner, R: TypeRelation<I>>(
             )?;
             return Ok(Const::new_unevaluated(
                 cx,
-                ty::UnevaluatedConst::new(cx, au.kind, args, au.is_rigid),
+                ty::UnevaluatedConst::with_rigidness(cx, au.kind, args, au.is_rigid),
             ));
         }
         (ty::ConstKind::Expr(ae), ty::ConstKind::Expr(be)) => {

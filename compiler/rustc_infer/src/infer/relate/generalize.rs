@@ -773,7 +773,7 @@ impl<'tcx> TypeRelation<TyCtxt<'tcx>> for Generalizer<'_, 'tcx> {
                         )?;
                         Ok(ty::Const::new_unevaluated(
                             tcx,
-                            ty::UnevaluatedConst::new(tcx, kind, args, is_rigid),
+                            ty::UnevaluatedConst::with_rigidness(tcx, kind, args, is_rigid),
                         ))
                     }
                 }

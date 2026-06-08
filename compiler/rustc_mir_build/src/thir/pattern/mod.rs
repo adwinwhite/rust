@@ -663,7 +663,6 @@ impl<'tcx, 'ptcx> PatCtxt<'tcx, 'ptcx> {
                 self.tcx,
                 ty::UnevaluatedConstKind::new_from_def_id(self.tcx, def_id),
                 args,
-                ty::IsRigid::No,
             ),
         );
         let mut pattern = self.const_to_pat(c, ty, id, span);
