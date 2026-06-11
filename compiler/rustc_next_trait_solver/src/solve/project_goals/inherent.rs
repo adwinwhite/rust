@@ -51,7 +51,7 @@ where
                 .iter_instantiated(cx, inherent_args)
                 .map(Unnormalized::skip_norm_wip)
                 .map(|pred| goal.with(cx, pred)),
-        );
+        )?;
 
         let normalized: I::Term = match inherent.kind {
             ty::AliasTermKind::InherentTy { def_id } => {
@@ -80,7 +80,7 @@ where
             goal.param_env,
             goal.predicate.projection_term,
             normalized,
-        );
+        )?;
         self.eq(goal.param_env, goal.predicate.term, normalized)?;
         self.evaluate_added_goals_and_make_canonical_response(Certainty::Yes)
     }

@@ -101,7 +101,7 @@ where
         param_env: I::ParamEnv,
         alias: ty::AliasTerm<I>,
         term: I::Term,
-    ) {
+    ) -> Result<(), NoSolutionOrRerunNonErased> {
         if let Some(ct) = term.as_const() {
             let cx = self.cx();
             let expected_ty = alias.expect_ct().type_of(cx).skip_norm_wip();
@@ -111,8 +111,9 @@ where
                     param_env,
                     predicate: ty::ClauseKind::ConstArgHasType(ct, expected_ty).upcast(cx),
                 },
-            );
+            )?;
         }
+        Ok(())
     }
 
     /// When normalizing an associated item, constrain the expected term to `term`.
@@ -141,10 +142,15 @@ where
     /// fires a `span_bug!`. Registering the obligation here ensures the type
     /// mismatch is reported during normalization itself, tainting the MIR
     /// before validation runs.
-    fn instantiate_normalizes_to_term(&mut self, goal: Goal<I, NormalizesTo<I>>, term: I::Term) {
-        self.push_const_arg_has_type_goal(goal.param_env, goal.predicate.alias, term);
+    fn instantiate_normalizes_to_term(
+        &mut self,
+        goal: Goal<I, NormalizesTo<I>>,
+        term: I::Term,
+    ) -> Result<(), NoSolutionOrRerunNonErased> {
+        self.push_const_arg_has_type_goal(goal.param_env, goal.predicate.alias, term)?;
         self.eq(goal.param_env, goal.predicate.term, term)
             .expect("expected goal term to be fully unconstrained");
+        Ok(())
     }
 
     /// Unlike `instantiate_normalizes_to_term` this instantiates the expected term
@@ -219,7 +225,7 @@ where
         let assumption_projection_pred = ecx.instantiate_binder_with_infer(projection_pred);
         ecx.eq(goal.param_env, goal.predicate.alias, assumption_projection_pred.projection_term)?;
 
-        ecx.instantiate_normalizes_to_term(goal, assumption_projection_pred.term);
+        ecx.instantiate_normalizes_to_term(goal, assumption_projection_pred.term)?;
 
         // Add GAT where clauses from the trait's definition
         // FIXME: We don't need these, since these are the type's own WF obligations.
@@ -229,7 +235,7 @@ where
                 .iter_instantiated(cx, goal.predicate.alias.args)
                 .map(Unnormalized::skip_norm_wip)
                 .map(|pred| goal.with(cx, pred)),
-        );
+        )?;
 
         then(ecx)
     }
@@ -295,7 +301,7 @@ where
                 .iter_instantiated(cx, impl_args)
                 .map(Unnormalized::skip_norm_wip)
                 .map(|pred| goal.with(cx, pred));
-            ecx.add_goals(GoalSource::ImplWhereBound, where_clause_bounds);
+            ecx.add_goals(GoalSource::ImplWhereBound, where_clause_bounds)?;
 
             // Bail if the nested goals don't hold here. This is to avoid unnecessarily
             // computing the `type_of` query for associated types that never apply, as
@@ -312,7 +318,7 @@ where
                     .iter_instantiated(cx, goal.predicate.alias.args)
                     .map(Unnormalized::skip_norm_wip)
                     .map(|pred| goal.with(cx, pred)),
-            );
+            )?;
 
             let error_response = |ecx: &mut EvalCtxt<'_, D>, guar| {
                 let error_term = match goal.predicate.alias.kind {
@@ -320,7 +326,7 @@ where
                     ty::AliasTermKind::ProjectionConst { .. } => Const::new_error(cx, guar).into(),
                     kind => panic!("expected projection, found {kind:?}"),
                 };
-                ecx.instantiate_normalizes_to_term(goal, error_term);
+                ecx.instantiate_normalizes_to_term(goal, error_term)?;
                 ecx.evaluate_added_goals_and_make_canonical_response(Certainty::Yes)
             };
 
@@ -344,7 +350,7 @@ where
                                 ecx.add_goal(
                                     GoalSource::Misc,
                                     goal.with(cx, PredicateKind::Ambiguous),
-                                );
+                                )?;
                                 return ecx
                                     .evaluate_added_goals_and_make_canonical_response(
                                         Certainty::Yes,
@@ -394,7 +400,7 @@ where
                         // would be relevant if any of the nested goals refer to the `term`.
                         // This is not the case here and we only prefer adding an ambiguous
                         // nested goal for consistency.
-                        ecx.add_goal(GoalSource::Misc, goal.with(cx, PredicateKind::Ambiguous));
+                        ecx.add_goal(GoalSource::Misc, goal.with(cx, PredicateKind::Ambiguous))?;
                         return then(ecx, Certainty::Yes).map_err(Into::into);
                     } else {
                         ecx.structurally_instantiate_normalizes_to_term(goal, goal.predicate.alias);
@@ -465,7 +471,7 @@ where
                 kind => panic!("expected projection, found {kind:?}"),
             };
 
-            ecx.instantiate_normalizes_to_term(goal, term);
+            ecx.instantiate_normalizes_to_term(goal, term)?;
             ecx.evaluate_added_goals_and_make_canonical_response(Certainty::Yes).map_err(Into::into)
         })
     }
@@ -485,7 +491,7 @@ where
         };
 
         ecx.probe_builtin_trait_candidate(BuiltinImplSource::Misc).enter(|ecx| {
-            ecx.instantiate_normalizes_to_term(goal, error_term);
+            ecx.instantiate_normalizes_to_term(goal, error_term)?;
             ecx.evaluate_added_goals_and_make_canonical_response(Certainty::Yes)
         })
     }
@@ -695,7 +701,7 @@ where
         );
 
         ecx.probe_builtin_trait_candidate(BuiltinImplSource::Misc).enter(|ecx| {
-            ecx.instantiate_normalizes_to_term(goal, upvars_ty.into());
+            ecx.instantiate_normalizes_to_term(goal, upvars_ty.into())?;
             ecx.evaluate_added_goals_and_make_canonical_response(Certainty::Yes)
         })
     }
@@ -760,8 +766,8 @@ where
                             cx.require_trait_lang_item(SolverTraitLangItem::Sized),
                             [I::GenericArg::from(goal.predicate.self_ty())],
                         );
-                        ecx.add_goal(GoalSource::Misc, goal.with(cx, sized_predicate));
-                        ecx.instantiate_normalizes_to_term(goal, Ty::new_unit(cx).into());
+                        ecx.add_goal(GoalSource::Misc, goal.with(cx, sized_predicate))?;
+                        ecx.instantiate_normalizes_to_term(goal, Ty::new_unit(cx).into())?;
                         ecx.evaluate_added_goals_and_make_canonical_response(Certainty::Yes)
                     });
 
@@ -815,7 +821,7 @@ where
         };
 
         ecx.probe_builtin_trait_candidate(BuiltinImplSource::Misc).enter(|ecx| {
-            ecx.instantiate_normalizes_to_term(goal, metadata_ty.into());
+            ecx.instantiate_normalizes_to_term(goal, metadata_ty.into())?;
             ecx.evaluate_added_goals_and_make_canonical_response(Certainty::Yes)
         })
     }
@@ -935,7 +941,7 @@ where
             );
             let yield_ty = args.as_coroutine().yield_ty();
             ecx.eq(goal.param_env, wrapped_expected_ty, yield_ty)?;
-            ecx.instantiate_normalizes_to_term(goal, expected_ty.into());
+            ecx.instantiate_normalizes_to_term(goal, expected_ty.into())?;
             ecx.evaluate_added_goals_and_make_canonical_response(Certainty::Yes)
         })
     }
@@ -1048,7 +1054,7 @@ where
         };
 
         ecx.probe_builtin_trait_candidate(BuiltinImplSource::Misc).enter(|ecx| {
-            ecx.instantiate_normalizes_to_term(goal, discriminant_ty.into());
+            ecx.instantiate_normalizes_to_term(goal, discriminant_ty.into())?;
             ecx.evaluate_added_goals_and_make_canonical_response(Certainty::Yes)
         })
     }
@@ -1093,7 +1099,7 @@ where
             _ => panic!("unexpected associated type {:?} in `Field`", goal.predicate),
         };
         ecx.probe_builtin_trait_candidate(BuiltinImplSource::Misc).enter(|ecx| {
-            ecx.instantiate_normalizes_to_term(goal, ty.into());
+            ecx.instantiate_normalizes_to_term(goal, ty.into())?;
             ecx.evaluate_added_goals_and_make_canonical_response(Certainty::Yes)
         })
     }
@@ -1111,7 +1117,7 @@ where
         impl_args: I::GenericArgs,
         impl_trait_ref: rustc_type_ir::TraitRef<I>,
         target_container_def_id: I::DefId,
-    ) -> Result<I::GenericArgs, NoSolution> {
+    ) -> Result<I::GenericArgs, NoSolutionOrRerunNonErased> {
         let cx = self.cx();
         Ok(if target_container_def_id == impl_trait_ref.def_id.into() {
             // Default value from the trait definition. No need to rebase.
@@ -1136,7 +1142,7 @@ where
                     .iter_instantiated(cx, target_args)
                     .map(Unnormalized::skip_norm_wip)
                     .map(|pred| goal.with(cx, pred)),
-            );
+            )?;
             goal.predicate.alias.args.rebase_onto(cx, impl_trait_ref.def_id.into(), target_args)
         })
     }
