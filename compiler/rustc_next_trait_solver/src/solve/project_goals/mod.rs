@@ -77,11 +77,11 @@ where
         // since equating the normalized terms will lead to additional constraints.
         self.inspect.make_canonical_response(Certainty::AMBIGUOUS);
 
-        // FIXME: We shouldn't be doing this in the long term in favor of eager
-        // normalization.
-        // Normalize alias types in rhs. This is done in `EvalCtxt::add_goal` for nested
-        // goals, but we might be evaluating the root goal.
-        let term = self.replace_alias_with_infer(term, GoalSource::TypeRelating, goal.param_env);
+        let term = self.normalize(
+            GoalSource::TypeRelating,
+            goal.param_env,
+            ty::Unnormalized::new_wip(term),
+        )?;
 
         // Apply the constraints.
         self.try_evaluate_added_goals()?;
@@ -104,7 +104,7 @@ where
 
         // Add the nested goals from normalization to our own nested goals.
         for (s, g) in nested_goals {
-            self.add_goal(s, g);
+            self.add_goal(s, g)?;
         }
 
         self.evaluate_added_goals_and_make_canonical_response(certainty)
