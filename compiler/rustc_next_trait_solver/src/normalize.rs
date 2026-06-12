@@ -172,7 +172,9 @@ where
     #[instrument(level = "trace", skip(self), ret)]
     fn try_fold_ty(&mut self, ty: I::Ty) -> Result<I::Ty, Self::Error> {
         let infcx = self.infcx;
-        if !ty.has_aliases() {
+        let original = ty;
+
+        if !self.cx().renormalize_rigid_aliases() && !ty.has_non_rigid_aliases() {
             return Ok(ty);
         }
 
@@ -218,12 +220,15 @@ where
             let normalized = crate::resolve::eager_resolve_vars(infcx, normalized);
             assert_eq!(original, normalized, "rigid alias is further normalized");
         }
+        Ok(normalized)
     }
 
     #[instrument(level = "trace", skip(self), ret)]
     fn try_fold_const(&mut self, ct: I::Const) -> Result<I::Const, Self::Error> {
         let infcx = self.infcx;
-        if !ct.has_aliases() {
+        let original = ct;
+
+        if !self.cx().renormalize_rigid_aliases() && !ct.has_non_rigid_aliases() {
             return Ok(ct);
         }
 
@@ -268,6 +273,9 @@ where
             let normalized = crate::resolve::eager_resolve_vars(infcx, normalized);
             assert_eq!(original, normalized, "rigid alias is further normalized");
         }
+
+        Ok(normalized)
+    }
 
     fn try_fold_predicate(&mut self, p: I::Predicate) -> Result<I::Predicate, Self::Error> {
         if p.allow_normalization() { p.try_super_fold_with(self) } else { Ok(p) }
