@@ -1,0 +1,84 @@
+error[E0277]: the trait bound `for<'a, 'b> T: InnerBinder<'a, 'b, 'c>` is not satisfied
+  --> $DIR/implied_higher_ranked_alias_outlives_assumption.rs:51:28
+   |
+LL | const REGIONCK_ENV<'c, T>: ReqTrait<'c, T> = todo!()
+   |                            ^^^^^^^^^^^^^^^ the trait `for<'a, 'b> InnerBinder<'a, 'b, 'c>` is not implemented for `T`
+   |
+note: required for `T` to implement `for<'a> OuterBinder<'a, 'c, ImpliedBound<'a, 'c, T>>`
+  --> $DIR/implied_higher_ranked_alias_outlives_assumption.rs:35:21
+   |
+LL | impl<'a, 'c, T0, S> OuterBinder<'a, 'c, T0> for S
+   |                     ^^^^^^^^^^^^^^^^^^^^^^^     ^
+LL | where
+LL |     for<'b> S: InnerBinder<'a, 'b, 'c>, {}
+   |                ----------------------- unsatisfied trait bound introduced here
+note: required by a bound in `ReqTrait`
+  --> $DIR/implied_higher_ranked_alias_outlives_assumption.rs:41:16
+   |
+LL | struct ReqTrait<'c, T>(&'c (), T)
+   |        -------- required by a bound in this struct
+LL | where
+LL |     for<'a> T: OuterBinder<'a, 'c, ImpliedBound<'a, 'c, T>>,;
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `ReqTrait`
+help: consider further restricting type parameter `T` with trait `InnerBinder`
+   |
+LL |     T: for<'a, 'b> Trait<'a, 'b> + for<'a, 'b> InnerBinder<'a, 'b, 'c>;
+   |                                  +++++++++++++++++++++++++++++++++++++
+
+error[E0277]: the trait bound `for<'a, 'b> T: InnerBinder<'a, 'b, 'c>` is not satisfied
+  --> $DIR/implied_higher_ranked_alias_outlives_assumption.rs:47:12
+   |
+LL |     let _: ReqTrait<'c, T>;
+   |            ^^^^^^^^^^^^^^^ the trait `for<'a, 'b> InnerBinder<'a, 'b, 'c>` is not implemented for `T`
+   |
+note: required for `T` to implement `for<'a> OuterBinder<'a, 'c, ImpliedBound<'a, 'c, T>>`
+  --> $DIR/implied_higher_ranked_alias_outlives_assumption.rs:35:21
+   |
+LL | impl<'a, 'c, T0, S> OuterBinder<'a, 'c, T0> for S
+   |                     ^^^^^^^^^^^^^^^^^^^^^^^     ^
+LL | where
+LL |     for<'b> S: InnerBinder<'a, 'b, 'c>, {}
+   |                ----------------------- unsatisfied trait bound introduced here
+note: required by a bound in `ReqTrait`
+  --> $DIR/implied_higher_ranked_alias_outlives_assumption.rs:41:16
+   |
+LL | struct ReqTrait<'c, T>(&'c (), T)
+   |        -------- required by a bound in this struct
+LL | where
+LL |     for<'a> T: OuterBinder<'a, 'c, ImpliedBound<'a, 'c, T>>,;
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `ReqTrait`
+help: consider further restricting type parameter `T` with trait `InnerBinder`
+   |
+LL |     T: for<'a, 'b> Trait<'a, 'b> + for<'a, 'b> InnerBinder<'a, 'b, 'c>
+   |                                  +++++++++++++++++++++++++++++++++++++
+
+error[E0277]: the trait bound `for<'a, 'b> T: InnerBinder<'a, 'b, 'c>` is not satisfied
+  --> $DIR/implied_higher_ranked_alias_outlives_assumption.rs:51:46
+   |
+LL | const REGIONCK_ENV<'c, T>: ReqTrait<'c, T> = todo!()
+   |                                              ^^^^^^^ the trait `for<'a, 'b> InnerBinder<'a, 'b, 'c>` is not implemented for `T`
+   |
+note: required for `T` to implement `for<'a> OuterBinder<'a, 'c, ImpliedBound<'a, 'c, T>>`
+  --> $DIR/implied_higher_ranked_alias_outlives_assumption.rs:35:21
+   |
+LL | impl<'a, 'c, T0, S> OuterBinder<'a, 'c, T0> for S
+   |                     ^^^^^^^^^^^^^^^^^^^^^^^     ^
+LL | where
+LL |     for<'b> S: InnerBinder<'a, 'b, 'c>, {}
+   |                ----------------------- unsatisfied trait bound introduced here
+note: required by a bound in `ReqTrait`
+  --> $DIR/implied_higher_ranked_alias_outlives_assumption.rs:41:16
+   |
+LL | struct ReqTrait<'c, T>(&'c (), T)
+   |        -------- required by a bound in this struct
+LL | where
+LL |     for<'a> T: OuterBinder<'a, 'c, ImpliedBound<'a, 'c, T>>,;
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `ReqTrait`
+help: consider further restricting type parameter `T` with trait `InnerBinder`
+   |
+LL |     T: for<'a, 'b> Trait<'a, 'b> + for<'a, 'b> InnerBinder<'a, 'b, 'c>;
+   |                                  +++++++++++++++++++++++++++++++++++++
+
+error: aborting due to 3 previous errors
+
+For more information about this error, try `rustc --explain E0277`.
