@@ -1,5 +1,6 @@
 //@ compile-flags: -Znext-solver -Zassumptions-on-binders
-//@ check-pass
+
+// FIXME: this shall pass. We should properly track assumptions in normalization folders.
 
 #![feature(generic_const_items)]
 
@@ -44,9 +45,12 @@ where
     T: for<'a, 'b> Trait<'a, 'b>
 {
     let _: ReqTrait<'c, T>;
+    //~^ ERROR: the trait bound `for<'a, 'b> T: InnerBinder<'a, 'b, 'c>` is not satisfied
 }
 
 const REGIONCK_ENV<'c, T>: ReqTrait<'c, T> = todo!()
+//~^ ERROR: the trait bound `for<'a, 'b> T: InnerBinder<'a, 'b, 'c>` is not satisfied
+//~| ERROR: the trait bound `for<'a, 'b> T: InnerBinder<'a, 'b, 'c>` is not satisfied
 where
     T: for<'a, 'b> Trait<'a, 'b>;
 

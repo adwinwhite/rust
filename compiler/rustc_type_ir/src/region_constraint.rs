@@ -54,7 +54,7 @@ use crate::{
     AliasTy, Binder, BoundRegion, BoundVar, BoundVariableKind, ConstKind, DebruijnIndex,
     FallibleTypeFolder, InferCtxtLike, InferTy, Interner, IsRigid, OutlivesPredicate, RegionKind,
     TyKind, TypeFoldable, TypeFolder, TypeVisitable, TypeVisitor, TypingMode, UniverseIndex,
-    Variance, VisitorResult,
+    Variance, VisitorResult, set_aliases_to_non_rigid,
 };
 
 #[derive_where(Clone, Debug; I: Interner)]
@@ -1106,7 +1106,12 @@ fn alias_outlives_candidates_from_assumptions<Infcx: InferCtxtLike<Interner = I>
                 region_constraints: vec![RegionConstraint::RegionOutlives(r2, r)],
             };
 
-            if let Ok(_) = relation.relate(alias.to_ty(infcx.cx(), IsRigid::No), alias2) {
+            // FIXME(rigid_aliases_marker): Both sides should be rigid in the future.
+            // Currently we can't guarantee that.
+            if let Ok(_) = relation.relate(
+                alias.to_ty(infcx.cx(), IsRigid::No),
+                set_aliases_to_non_rigid(infcx.cx(), alias2).skip_norm_wip(),
+            ) {
                 candidates
                     .push(RegionConstraint::And(relation.region_constraints.into_boxed_slice()));
             }
