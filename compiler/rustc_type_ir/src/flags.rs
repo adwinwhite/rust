@@ -484,7 +484,10 @@ impl<I: Interner> FlagComputation<I> {
             ty::ConstKind::Unevaluated(uv) => {
                 self.add_args(uv.args.as_slice());
                 self.add_flags(TypeFlags::HAS_CT_PROJECTION);
-                self.add_flags(TypeFlags::HAS_NON_RIGID_ALIAS);
+                match uv.is_rigid {
+                    ty::IsRigid::Yes => self.add_flags(TypeFlags::HAS_RIGID_ALIAS),
+                    ty::IsRigid::No => self.add_flags(TypeFlags::HAS_NON_RIGID_ALIAS),
+                }
             }
             ty::ConstKind::Infer(infer) => match infer {
                 ty::InferConst::Fresh(_) => self.add_flags(TypeFlags::HAS_CT_FRESH),
