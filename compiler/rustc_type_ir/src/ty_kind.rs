@@ -84,6 +84,8 @@ impl<I: Interner> AliasTyKind<I> {
     }
 }
 
+/// This is only used by the next solver.
+/// We shall not have `IsRigid::Yes` in the old solver.
 #[derive(Debug, Clone, Copy, Hash, PartialEq)]
 #[derive(TypeVisitable_Generic, GenericTypeVisitable, TypeFoldable_Generic)]
 #[cfg_attr(
