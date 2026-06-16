@@ -249,6 +249,7 @@ fn iterates_same_ty<'tcx>(cx: &LateContext<'tcx>, iter_ty: Ty<'tcx>, collect_ty:
             cx.typing_env(),
             Unnormalized::new_wip(Ty::new_projection_from_args(
                 cx.tcx,
+                ty::IsRigid::No,
                 into_iter_item_proj.kind.def_id(),
                 into_iter_item_proj.args,
             )),
@@ -280,7 +281,7 @@ fn is_contains_sig(cx: &LateContext<'_>, call_id: HirId, iter_expr: &Expr<'_>) -
             iter_trait,
         )
         && let args = cx.tcx.mk_args(&[GenericArg::from(typeck.expr_ty_adjusted(iter_expr))])
-        && let proj_ty = Ty::new_projection_from_args(cx.tcx, iter_item.def_id, args)
+        && let proj_ty = Ty::new_projection_from_args(cx.tcx, ty::IsRigid::No, iter_item.def_id, args)
         && let Ok(item_ty) = cx
             .tcx
             .try_normalize_erasing_regions(cx.typing_env(), Unnormalized::new_wip(proj_ty))

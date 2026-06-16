@@ -350,7 +350,7 @@ pub(crate) fn name_from_pat(p: &hir::Pat<'_>) -> Symbol {
 
 pub(crate) fn print_const(tcx: TyCtxt<'_>, n: ty::Const<'_>) -> String {
     match n.kind() {
-        ty::ConstKind::Unevaluated(ty::UnevaluatedConst { kind, .. }) => match kind {
+        ty::ConstKind::Unevaluated(_, ty::UnevaluatedConst { kind, .. }) => match kind {
             ty::UnevaluatedConstKind::Projection { def_id }
             | ty::UnevaluatedConstKind::Inherent { def_id }
             | ty::UnevaluatedConstKind::Free { def_id }
