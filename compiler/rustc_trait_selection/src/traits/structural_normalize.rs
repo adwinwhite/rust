@@ -50,7 +50,7 @@ impl<'tcx> At<'_, 'tcx> {
                 return Ok(term);
             };
 
-            let new_infer = self.infcx.next_term_var_of_kind(term, self.cause.span);
+            let new_infer = self.infcx.next_term_var_of_alias_kind(alias, self.cause.span);
 
             // We simply emit an `Projection` goal here, since that will take care of
             // normalizing the LHS of the projection until it is a rigid projection

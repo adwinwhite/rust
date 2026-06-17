@@ -51,8 +51,7 @@ where
     let mut stalled_goals = vec![];
     let mut folder = NormalizationFolder::new(infcx, universes.clone(), |alias_term| {
         let delegate = <&SolverDelegate<'tcx>>::from(infcx);
-        let infer_term = delegate
-            .next_term_var_of_kind(alias_term.to_term(infcx.tcx, ty::IsRigid::No), at.cause.span);
+        let infer_term = delegate.next_term_var_of_alias_kind(alias_term, at.cause.span);
         let predicate = ty::ProjectionPredicate { projection_term: alias_term, term: infer_term };
         let goal = Goal::new(infcx.tcx, at.param_env, predicate);
         let result = match delegate.evaluate_root_goal(goal, at.cause.span, None) {
@@ -93,10 +92,7 @@ struct ReplaceAliasWithInfer<'me, 'tcx> {
 impl<'me, 'tcx> ReplaceAliasWithInfer<'me, 'tcx> {
     fn term_to_infer(&mut self, alias_term: ty::AliasTerm<'tcx>) -> ty::Term<'tcx> {
         let infcx = self.at.infcx;
-        let infer_term = infcx.next_term_var_of_kind(
-            alias_term.to_term(infcx.tcx, ty::IsRigid::No),
-            self.at.cause.span,
-        );
+        let infer_term = infcx.next_term_var_of_alias_kind(alias_term, self.at.cause.span);
         let obligation = Obligation::new(
             infcx.tcx,
             self.at.cause.clone(),

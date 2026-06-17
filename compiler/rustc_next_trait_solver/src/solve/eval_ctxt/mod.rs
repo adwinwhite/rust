@@ -1007,10 +1007,19 @@ where
 
     /// Returns a ty infer or a const infer depending on whether `kind` is a `Ty` or `Const`.
     /// If `kind` is an integer inference variable this will still return a ty infer var.
-    pub(super) fn next_term_infer_of_kind(&mut self, term: I::Term) -> I::Term {
-        match term.kind() {
-            ty::TermKind::Ty(_) => self.next_ty_infer().into(),
-            ty::TermKind::Const(_) => self.next_const_infer().into(),
+    pub(super) fn next_term_infer_of_alias_kind(
+        &mut self,
+        alias_term: ty::AliasTerm<I>,
+    ) -> I::Term {
+        match alias_term.kind {
+            ty::AliasTermKind::ProjectionTy { .. }
+            | ty::AliasTermKind::InherentTy { .. }
+            | ty::AliasTermKind::OpaqueTy { .. }
+            | ty::AliasTermKind::FreeTy { .. } => self.next_ty_infer().into(),
+            ty::AliasTermKind::FreeConst { .. }
+            | ty::AliasTermKind::InherentConst { .. }
+            | ty::AliasTermKind::AnonConst { .. }
+            | ty::AliasTermKind::ProjectionConst { .. } => self.next_const_infer().into(),
         }
     }
 
@@ -1705,8 +1714,7 @@ where
         // To drop the mutable borrow of self early.
         let infcx = self.delegate.deref();
         let mut folder = NormalizationFolder::new(infcx, vec![], |alias_term| {
-            let infer_term =
-                self.next_term_infer_of_kind(alias_term.to_term(self.cx(), ty::IsRigid::No));
+            let infer_term = self.next_term_infer_of_alias_kind(alias_term);
             let pred = ty::ProjectionPredicate { projection_term: alias_term, term: infer_term };
             let goal = Goal::new(self.cx(), param_env, pred);
             self.inspect.add_goal(self.delegate, self.max_input_universe, source, goal);

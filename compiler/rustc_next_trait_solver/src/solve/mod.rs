@@ -382,7 +382,7 @@ where
         }
 
         if let Some(alias) = term.to_alias_term() {
-            let normalized_term = self.next_term_infer_of_kind(term);
+            let normalized_term = self.next_term_infer_of_alias_kind(alias);
             let projection_goal = Goal::new(
                 self.cx(),
                 param_env,

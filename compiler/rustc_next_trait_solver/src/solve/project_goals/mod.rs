@@ -44,7 +44,7 @@ where
         goal: Goal<I, ProjectionPredicate<I>>,
     ) -> QueryResultOrRerunNonErased<I> {
         let ty::ProjectionPredicate { projection_term: alias, term } = goal.predicate;
-        let unconstrained_term = self.next_term_infer_of_kind(term);
+        let unconstrained_term = self.next_term_infer_of_alias_kind(alias);
         let normalizes_to =
             goal.with(self.cx(), ty::NormalizesTo { alias, term: unconstrained_term });
 
