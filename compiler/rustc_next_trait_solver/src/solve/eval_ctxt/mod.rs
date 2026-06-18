@@ -1198,37 +1198,12 @@ where
             let identity_args = self.fresh_args_for_item(def_id);
             let rigid_ctor = alias.with_args(cx, identity_args);
             let ctor_term = rigid_ctor.to_term(cx, ty::IsRigid::Yes);
-            let obligations = self.delegate.eq_structurally_relating_aliases(
-                param_env,
-                term,
-                ctor_term,
-                self.origin_span,
-            )?;
+            let obligations = self.delegate.eq(param_env, term, ctor_term, self.origin_span)?;
             debug_assert!(obligations.is_empty());
             self.relate(param_env, alias, variance, rigid_ctor)
         } else {
             Err(NoSolutionOrRerunNonErased::NoSolution(NoSolution))
         }
-    }
-
-    /// This should only be used when we're either instantiating a previously
-    /// unconstrained "return value" or when we're sure that all aliases in
-    /// the types are rigid.
-    #[instrument(level = "trace", skip(self, param_env), ret)]
-    pub(super) fn eq_structurally_relating_aliases<T: Relate<I>>(
-        &mut self,
-        param_env: I::ParamEnv,
-        lhs: T,
-        rhs: T,
-    ) -> Result<(), NoSolution> {
-        let result = self.delegate.eq_structurally_relating_aliases(
-            param_env,
-            lhs,
-            rhs,
-            self.origin_span,
-        )?;
-        assert_eq!(result, vec![]);
-        Ok(())
     }
 
     #[instrument(level = "trace", skip(self, param_env), ret)]

@@ -610,7 +610,10 @@ pub(crate) fn coerce_shared_info<'tcx>(
 
     let coerce_shared_trait = tcx.require_lang_item(LangItem::CoerceShared, span);
 
-    let source = tcx.type_of(impl_did).instantiate_identity().skip_norm_wip();
+    let source = tcx.type_of(impl_did).instantiate_identity();
+    let Some((source, _)) = structurally_normalize_ty(tcx, &infcx, impl_did, span, source) else {
+        todo!("something went wrong with structurally_normalize_ty");
+    };
     let trait_ref = tcx.impl_trait_ref(impl_did).instantiate_identity().skip_norm_wip();
 
     if trait_impl_lifetime_params_count(tcx, impl_did) != 1 {
@@ -699,21 +702,13 @@ pub(crate) fn coerce_shared_info<'tcx>(
         if source.ref_mutability() == Some(ty::Mutability::Mut)
             && target.ref_mutability() == Some(ty::Mutability::Not)
             && infcx
-                .eq_structurally_relating_aliases(
-                    param_env,
-                    source.peel_refs(),
-                    target.peel_refs(),
-                    source_field_span,
-                )
+                .eq(param_env, source.peel_refs(), target.peel_refs(), source_field_span)
                 .is_ok()
         {
             // &mut T implements CoerceShared to &T, except not really.
             return Ok(());
         }
-        if infcx
-            .eq_structurally_relating_aliases(param_env, source, target, source_field_span)
-            .is_err()
-        {
+        if infcx.eq(param_env, source, target, source_field_span).is_err() {
             // The two data fields don't agree on a common type; this means
             // that they must be `A: CoerceShared<B>`. Register an obligation
             // for that.

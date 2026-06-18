@@ -20,6 +20,17 @@ pub trait RelateExt: InferCtxtLike {
         TypeError<Self::Interner>,
     >;
 
+    fn eq<T: Relate<Self::Interner>>(
+        &self,
+        param_env: <Self::Interner as Interner>::ParamEnv,
+        lhs: T,
+        rhs: T,
+        span: <Self::Interner as Interner>::Span,
+    ) -> Result<
+        Vec<Goal<Self::Interner, <Self::Interner as Interner>::Predicate>>,
+        TypeError<Self::Interner>,
+    >;
+
     fn eq_structurally_relating_aliases<T: Relate<Self::Interner>>(
         &self,
         param_env: <Self::Interner as Interner>::ParamEnv,
@@ -48,6 +59,19 @@ impl<Infcx: InferCtxtLike> RelateExt for Infcx {
             SolverRelating::new(self, StructurallyRelateAliases::No, variance, param_env, span);
         relate.relate(lhs, rhs)?;
         Ok(relate.goals)
+    }
+
+    fn eq<T: Relate<Self::Interner>>(
+        &self,
+        param_env: <Self::Interner as Interner>::ParamEnv,
+        lhs: T,
+        rhs: T,
+        span: <Self::Interner as Interner>::Span,
+    ) -> Result<
+        Vec<Goal<Self::Interner, <Self::Interner as Interner>::Predicate>>,
+        TypeError<Self::Interner>,
+    > {
+        self.relate(param_env, lhs, ty::Invariant, rhs, span)
     }
 
     fn eq_structurally_relating_aliases<T: Relate<Self::Interner>>(

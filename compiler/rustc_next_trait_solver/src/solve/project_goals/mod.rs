@@ -100,7 +100,7 @@ where
         // FIXME: Strictly speaking this may be incomplete if the normalized-to
         // type contains an ambiguous alias referencing bound regions. We should
         // consider changing this to only use "shallow structural equality".
-        self.eq_structurally_relating_aliases(goal.param_env, term, unconstrained_term)?;
+        self.eq(goal.param_env, term, unconstrained_term)?;
 
         // Add the nested goals from normalization to our own nested goals.
         for (s, g) in nested_goals {
