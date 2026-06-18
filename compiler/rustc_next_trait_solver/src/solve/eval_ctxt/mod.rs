@@ -527,7 +527,7 @@ where
         // so we only canonicalize the lookup table and ignore
         // duplicate entries.
         let opaque_types = self.delegate.clone_opaque_types_lookup_table();
-        let (goal, opaque_types) = eager_resolve_vars(self.delegate, (goal, opaque_types));
+        let (goal, opaque_types) = eager_resolve_vars(&**self.delegate, (goal, opaque_types));
         let typing_mode = self.typing_mode();
         let step_kind = self.step_kind_for_source(source);
 
@@ -1605,7 +1605,7 @@ where
         let external_constraints =
             self.compute_external_query_constraints(certainty, normalization_nested_goals);
         let (var_values, mut external_constraints) =
-            eager_resolve_vars(self.delegate, (self.var_values, external_constraints));
+            eager_resolve_vars(&**self.delegate, (self.var_values, external_constraints));
 
         // Remove any trivial or duplicated region constraints once we've resolved regions
         let mut unique = HashSet::default();
@@ -1785,6 +1785,10 @@ where
     }
 
     fn fold_ty(&mut self, ty: I::Ty) -> I::Ty {
+        if !self.cx().renormalize_rigid_aliases() && !ty.has_non_rigid_aliases() {
+            return ty;
+        }
+
         match ty.kind() {
             ty::Alias(alias) if !ty.has_escaping_bound_vars() => {
                 let infer_ty = self.ecx.next_ty_infer();
@@ -1813,6 +1817,10 @@ where
     }
 
     fn fold_const(&mut self, ct: I::Const) -> I::Const {
+        if !self.cx().renormalize_rigid_aliases() && !ct.has_non_rigid_aliases() {
+            return ct;
+        }
+
         match ct.kind() {
             ty::ConstKind::Unevaluated(uv) if !ct.has_escaping_bound_vars() => {
                 let infer_ct = self.ecx.next_const_infer();
@@ -1829,6 +1837,10 @@ where
     }
 
     fn fold_predicate(&mut self, predicate: I::Predicate) -> I::Predicate {
+        if !self.cx().renormalize_rigid_aliases() && !predicate.has_non_rigid_aliases() {
+            return predicate;
+        }
+
         if predicate.allow_normalization() { predicate.super_fold_with(self) } else { predicate }
     }
 }
@@ -1864,7 +1876,7 @@ pub(super) fn evaluate_root_goal_for_proof_tree<D: SolverDelegate<Interner = I>,
     origin_span: I::Span,
 ) -> (Result<NestedNormalizationGoals<I>, NoSolution>, inspect::GoalEvaluation<I>) {
     let opaque_types = delegate.clone_opaque_types_lookup_table();
-    let (goal, opaque_types) = eager_resolve_vars(delegate, (goal, opaque_types));
+    let (goal, opaque_types) = eager_resolve_vars(&**delegate, (goal, opaque_types));
     let typing_mode = delegate.typing_mode_raw().assert_not_erased();
 
     let (orig_values, canonical_goal) =

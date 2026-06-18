@@ -42,6 +42,11 @@ where
     let infcx = at.infcx;
     let value = value.skip_normalization();
     let value = infcx.resolve_vars_if_possible(value);
+
+    if !infcx.tcx.renormalize_rigid_aliases() && !value.has_non_rigid_aliases() {
+        return Normalized { value, obligations: Default::default() };
+    }
+
     let original_value = value.clone();
     let mut stalled_goals = vec![];
     let mut folder = NormalizationFolder::new(infcx, universes.clone(), |alias_term| {
@@ -119,12 +124,15 @@ impl<'me, 'tcx> TypeFolder<TyCtxt<'tcx>> for ReplaceAliasWithInfer<'me, 'tcx> {
     }
 
     fn fold_ty(&mut self, ty: Ty<'tcx>) -> Ty<'tcx> {
-        if !ty.has_aliases() {
+        if !self.cx().renormalize_rigid_aliases() && !ty.has_non_rigid_aliases() {
             return ty;
         }
 
         let ty = ty.super_fold_with(self);
-        let ty::Alias(_, alias) = *ty.kind() else { return ty };
+        let ty::Alias(orig_is_rigid, alias) = *ty.kind() else { return ty };
+        if !self.cx().renormalize_rigid_aliases() && orig_is_rigid == ty::IsRigid::Yes {
+            return ty;
+        }
 
         if ty.has_escaping_bound_vars() {
             let (replaced, ..) =
@@ -137,12 +145,15 @@ impl<'me, 'tcx> TypeFolder<TyCtxt<'tcx>> for ReplaceAliasWithInfer<'me, 'tcx> {
     }
 
     fn fold_const(&mut self, ct: ty::Const<'tcx>) -> ty::Const<'tcx> {
-        if !ct.has_aliases() {
+        if !self.cx().renormalize_rigid_aliases() && !ct.has_non_rigid_aliases() {
             return ct;
         }
 
         let ct = ct.super_fold_with(self);
-        let ty::ConstKind::Unevaluated(_, uv) = ct.kind() else { return ct };
+        let ty::ConstKind::Unevaluated(orig_is_rigid, uv) = ct.kind() else { return ct };
+        if !self.cx().renormalize_rigid_aliases() && orig_is_rigid == ty::IsRigid::Yes {
+            return ct;
+        }
 
         if ct.has_escaping_bound_vars() {
             let (replaced, ..) =
