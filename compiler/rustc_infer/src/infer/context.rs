@@ -5,10 +5,11 @@ use rustc_middle::ty::relate::RelateResult;
 use rustc_middle::ty::relate::combine::PredicateEmittingRelation;
 use rustc_middle::ty::{self, Ty, TyCtxt, TypeFoldable};
 use rustc_span::{DUMMY_SP, ErrorGuaranteed, Span};
+use rustc_type_ir::max_universe;
 
 use super::{
-    BoundRegionConversionTime, InferCtxt, OpaqueTypeStorageEntries, RegionVariableOrigin,
-    SubregionOrigin,
+    BoundRegionConversionTime, ConstVariableValue, InferCtxt, OpaqueTypeStorageEntries,
+    RegionVariableOrigin, SubregionOrigin,
 };
 
 impl<'tcx> rustc_type_ir::InferCtxtLike for InferCtxt<'tcx> {
@@ -251,6 +252,39 @@ impl<'tcx> rustc_type_ir::InferCtxtLike for InferCtxt<'tcx> {
         self.inner.borrow_mut().const_unification_table().union(a, b);
     }
 
+    fn instantiate_ty_var_eq_raw(&self, vid: ty::TyVid, ty: Ty<'tcx>) {
+        #[cfg(debug_assertions)]
+        {
+            // Compared to the inherent methods, the function on `InferCtxtLike`
+            // is easier to understand.
+            #[allow(rustc::usage_of_type_ir_traits)]
+            let var_universe = self.universe_of_ty(vid).unwrap();
+            let ty_universe = max_universe(self, ty);
+            assert!(
+                var_universe.can_name(ty_universe),
+                "var in universe {var_universe:?} can name {ty:?} in universe {ty_universe:?}"
+            );
+        }
+
+        self.inner.borrow_mut().type_variables().instantiate(vid, ty)
+    }
+
+    fn instantiate_const_var_eq_raw(&self, vid: ty::ConstVid, ct: ty::Const<'tcx>) {
+        #[cfg(debug_assertions)]
+        {
+            // Compared to the inherent methods, the function on `InferCtxtLike`
+            // is easier to understand.
+            #[allow(rustc::usage_of_type_ir_traits)]
+            let universe = self.universe_of_ct(vid).unwrap();
+            assert!(universe.can_name(max_universe(self, ct)));
+        }
+
+        self.inner
+            .borrow_mut()
+            .const_unification_table()
+            .union_value(vid, ConstVariableValue::Known { value: ct })
+    }
+
     fn instantiate_ty_var_raw<R: PredicateEmittingRelation<Self>>(
         &self,
         relation: &mut R,
@@ -330,6 +364,33 @@ impl<'tcx> rustc_type_ir::InferCtxtLike for InferCtxt<'tcx> {
         vis: ty::VisibleForLeakCheck,
         span: Span,
     ) {
+        #[cfg(debug_assertions)]
+        {
+            let a = if let ty::ReVar(vid) = a.kind() {
+                #[allow(rustc::usage_of_type_ir_traits)]
+                self.opportunistic_resolve_lt_var(vid)
+            } else {
+                a
+            };
+            let b = if let ty::ReVar(vid) = b.kind() {
+                #[allow(rustc::usage_of_type_ir_traits)]
+                self.opportunistic_resolve_lt_var(vid)
+            } else {
+                b
+            };
+            match (a.kind(), b.kind(), a, b) {
+                (ty::ReVar(_), ty::ReVar(_), _, _) => {}
+                (ty::ReVar(vid), _, _, reg) | (_, ty::ReVar(vid), reg, _) => {
+                    // Compared to the inherent methods, the function on `InferCtxtLike`
+                    // is easier to understand.
+                    #[allow(rustc::usage_of_type_ir_traits)]
+                    let universe = self.universe_of_lt(vid).unwrap();
+                    assert!(universe.can_name(max_universe(self, reg)));
+                }
+                _ => {}
+            }
+        }
+
         self.inner.borrow_mut().unwrap_region_constraints().make_eqregion(
             SubregionOrigin::RelateRegionParamBound(span, None),
             a,
