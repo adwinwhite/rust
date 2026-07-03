@@ -1,14 +1,18 @@
 //! Definition of `InferCtxtLike` from the librarified type layer.
+
+use rustc_data_structures::sso::SsoHashMap;
 use rustc_hir::def_id::DefId;
 use rustc_middle::traits::ObligationCause;
 use rustc_middle::ty::relate::RelateResult;
 use rustc_middle::ty::relate::combine::PredicateEmittingRelation;
 use rustc_middle::ty::{self, Ty, TyCtxt, TypeFoldable};
 use rustc_span::{DUMMY_SP, ErrorGuaranteed, Span};
+use rustc_type_ir::{TypeSuperFoldable, TypeVisitableExt};
 
+use super::type_variable::TypeVariableValue;
 use super::{
-    BoundRegionConversionTime, InferCtxt, OpaqueTypeStorageEntries, RegionVariableOrigin,
-    SubregionOrigin,
+    BoundRegionConversionTime, ConstVariableValue, InferCtxt, OpaqueTypeStorageEntries,
+    RegionVariableOrigin, SubregionOrigin,
 };
 
 impl<'tcx> rustc_type_ir::InferCtxtLike for InferCtxt<'tcx> {
@@ -251,6 +255,29 @@ impl<'tcx> rustc_type_ir::InferCtxtLike for InferCtxt<'tcx> {
         self.inner.borrow_mut().const_unification_table().union(a, b);
     }
 
+    fn instantiate_ty_var_eq_raw(&self, vid: ty::TyVid, ty: Ty<'tcx>) {
+        let ty = ty.fold_with(&mut UniverseFolder {
+            infcx: self,
+            for_universe: self.try_resolve_ty_var(vid).unwrap_err(),
+            cache: Default::default(),
+        });
+
+        self.inner.borrow_mut().type_variables().instantiate(vid, ty)
+    }
+
+    fn instantiate_const_var_eq_raw(&self, vid: ty::ConstVid, ct: ty::Const<'tcx>) {
+        let ct = ct.fold_with(&mut UniverseFolder {
+            infcx: self,
+            for_universe: self.try_resolve_const_var(vid).unwrap_err(),
+            cache: Default::default(),
+        });
+
+        self.inner
+            .borrow_mut()
+            .const_unification_table()
+            .union_value(vid, ConstVariableValue::Known { value: ct })
+    }
+
     fn instantiate_ty_var_raw<R: PredicateEmittingRelation<Self>>(
         &self,
         relation: &mut R,
@@ -409,5 +436,108 @@ impl<'tcx> rustc_type_ir::InferCtxtLike for InferCtxt<'tcx> {
 
     fn reset_opaque_types(&self) {
         let _ = self.take_opaque_types();
+    }
+}
+
+// We always set the universes in generalized term to the infer var's
+// in generalization, if those universes are higher than the infer var's.
+// We replicate the behavior here.
+struct UniverseFolder<'a, 'tcx> {
+    infcx: &'a InferCtxt<'tcx>,
+    for_universe: ty::UniverseIndex,
+    cache: SsoHashMap<Ty<'tcx>, Ty<'tcx>>,
+}
+impl<'a, 'tcx> ty::TypeFolder<TyCtxt<'tcx>> for UniverseFolder<'a, 'tcx> {
+    fn cx(&self) -> TyCtxt<'tcx> {
+        self.infcx.tcx
+    }
+
+    fn fold_ty(&mut self, t: Ty<'tcx>) -> Ty<'tcx> {
+        if !(t.has_free_regions() || t.has_infer()) {
+            return t;
+        }
+
+        if let Some(&answer) = self.cache.get(&t) {
+            return answer;
+        }
+
+        let folded = if let ty::Infer(ty::TyVar(vid)) = t.kind() {
+            let vid = self.infcx.root_var(*vid);
+            let probe = self.infcx.inner.borrow_mut().type_variables().probe(vid);
+            match probe {
+                TypeVariableValue::Known { value: u } => u.super_fold_with(self),
+                TypeVariableValue::Unknown { universe } => {
+                    if self.for_universe.can_name(universe) {
+                        t
+                    } else {
+                        let mut inner = self.infcx.inner.borrow_mut();
+                        let origin = inner.type_variables().var_origin(vid);
+                        let new_var_id = inner.type_variables().new_var(self.for_universe, origin);
+                        inner.type_variables().equate(vid, new_var_id);
+                        Ty::new_var(self.cx(), new_var_id)
+                    }
+                }
+            }
+        } else {
+            t.super_fold_with(self)
+        };
+
+        self.cache.insert(t, folded);
+        folded
+    }
+
+    fn fold_const(&mut self, c: ty::Const<'tcx>) -> ty::Const<'tcx> {
+        if !(c.has_free_regions() || c.has_infer()) {
+            return c;
+        }
+
+        let ty::ConstKind::Infer(ty::InferConst::Var(vid)) = c.kind() else {
+            return c.super_fold_with(self);
+        };
+
+        let vid = self.infcx.root_const_var(vid);
+        let universe = self.infcx.try_resolve_const_var(vid).unwrap_err();
+        if self.for_universe.can_name(universe) {
+            c
+        } else {
+            let origin = self.infcx.const_var_origin(vid).unwrap();
+            let new_var_id = self
+                .infcx
+                .inner
+                .borrow_mut()
+                .const_unification_table()
+                .new_key(ConstVariableValue::Unknown { origin, universe: self.for_universe })
+                .vid;
+
+            self.infcx.inner.borrow_mut().const_unification_table().union(vid, new_var_id);
+
+            ty::Const::new_var(self.cx(), new_var_id)
+        }
+    }
+
+    fn fold_region(&mut self, r: ty::Region<'tcx>) -> ty::Region<'tcx> {
+        match r.kind() {
+            ty::ReBound(..) | ty::ReErased => r,
+            _ => {
+                let r_universe = self.infcx.universe_of_region(r);
+                if self.for_universe.can_name(r_universe) {
+                    r
+                } else {
+                    // FIXME: unfortunately we lose the relating span here unless we take another
+                    // argument.
+                    let new_region = self.infcx.next_region_var_in_universe(
+                        RegionVariableOrigin::Misc(DUMMY_SP),
+                        self.for_universe,
+                    );
+                    self.infcx.equate_regions(
+                        SubregionOrigin::RelateRegionParamBound(DUMMY_SP, None),
+                        r,
+                        new_region,
+                        ty::VisibleForLeakCheck::Yes,
+                    );
+                    new_region
+                }
+            }
+        }
     }
 }
