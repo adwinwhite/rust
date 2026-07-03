@@ -16,8 +16,7 @@ use rustc_index::IndexVec;
 use rustc_type_ir::inherent::*;
 use rustc_type_ir::relate::combine::PredicateEmittingRelation;
 use rustc_type_ir::relate::{
-    self, Relate, RelateResult, StructurallyRelateAliases, TypeRelation,
-    VarianceDiagInfo, relate_args_invariantly,
+    self, Relate, RelateResult, TypeRelation, VarianceDiagInfo, relate_args_invariantly,
 };
 use rustc_type_ir::{
     self as ty, Canonical, CanonicalVarKind, CanonicalVarValues, InferCtxtLike, Interner,
@@ -455,10 +454,6 @@ where
 
     fn param_env(&self) -> I::ParamEnv {
         self.param_env
-    }
-
-    fn structurally_relate_aliases(&self) -> StructurallyRelateAliases {
-        StructurallyRelateAliases::Yes
     }
 
     fn register_predicates(
