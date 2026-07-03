@@ -14,7 +14,13 @@ use std::iter;
 use canonicalizer::Canonicalizer;
 use rustc_index::IndexVec;
 use rustc_type_ir::inherent::*;
-use rustc_type_ir::relate::solver_relating::RelateExt;
+use rustc_type_ir::relate::combine::{
+    PredicateEmittingRelation, super_combine_consts, super_combine_tys,
+};
+use rustc_type_ir::relate::{
+    Relate, RelateResult, StructurallyRelateAliases, TypeRelation, VarianceDiagInfo,
+    relate_args_invariantly,
+};
 use rustc_type_ir::{
     self as ty, Canonical, CanonicalVarKind, CanonicalVarValues, InferCtxtLike, Interner,
     TypeFoldable, TypingMode, TypingModeEqWrapper,
@@ -239,6 +245,193 @@ where
     })
 }
 
+/// Enforce that `a` is equal to `b`.
+pub struct ResponseRelating<'infcx, Infcx, I: Interner> {
+    infcx: &'infcx Infcx,
+    param_env: I::ParamEnv,
+    span: I::Span,
+}
+
+impl<'infcx, Infcx, I> ResponseRelating<'infcx, Infcx, I>
+where
+    Infcx: InferCtxtLike<Interner = I>,
+    I: Interner,
+{
+    pub fn new(infcx: &'infcx Infcx, param_env: I::ParamEnv, span: I::Span) -> Self {
+        ResponseRelating { infcx, span, param_env }
+    }
+}
+
+impl<Infcx, I> TypeRelation<I> for ResponseRelating<'_, Infcx, I>
+where
+    Infcx: InferCtxtLike<Interner = I>,
+    I: Interner,
+{
+    fn cx(&self) -> I {
+        self.infcx.cx()
+    }
+
+    fn relate_ty_args(
+        &mut self,
+        a_ty: I::Ty,
+        _b_ty: I::Ty,
+        _def_id: I::DefId,
+        a_args: I::GenericArgs,
+        b_args: I::GenericArgs,
+        _: impl FnOnce(I::GenericArgs) -> I::Ty,
+    ) -> RelateResult<I, I::Ty> {
+        relate_args_invariantly(self, a_args, b_args)?;
+        Ok(a_ty)
+    }
+    fn relate_with_variance<T: Relate<I>>(
+        &mut self,
+        _variance: ty::Variance,
+        _info: VarianceDiagInfo<I>,
+        a: T,
+        b: T,
+    ) -> RelateResult<I, T> {
+        self.relate(a, b)
+    }
+
+    #[instrument(skip(self), level = "trace")]
+    fn tys(&mut self, a: I::Ty, b: I::Ty) -> RelateResult<I, I::Ty> {
+        if a == b {
+            return Ok(a);
+        }
+
+        let infcx = self.infcx;
+        let a = infcx.shallow_resolve(a);
+        let b = infcx.shallow_resolve(b);
+
+        match (a.kind(), b.kind()) {
+            (ty::Infer(ty::TyVar(a_id)), ty::Infer(ty::TyVar(b_id))) => {
+                infcx.equate_ty_vids_raw(a_id, b_id);
+            }
+
+            (ty::Infer(ty::TyVar(a_vid)), _) => {
+                infcx.equate_ty_var_raw(a_vid, b);
+            }
+
+            (_, ty::Infer(ty::TyVar(b_vid))) => {
+                infcx.equate_ty_var_raw(b_vid, a);
+            }
+
+            _ => {
+                super_combine_tys(infcx, self, a, b)?;
+            }
+        }
+
+        Ok(a)
+    }
+
+    #[instrument(skip(self), level = "trace")]
+    fn regions(&mut self, a: I::Region, b: I::Region) -> RelateResult<I, I::Region> {
+        self.infcx.equate_regions(a, b, VisibleForLeakCheck::Yes, self.span);
+
+        Ok(a)
+    }
+
+    #[instrument(skip(self), level = "trace")]
+    fn consts(&mut self, a: I::Const, b: I::Const) -> RelateResult<I, I::Const> {
+        if a == b {
+            return Ok(a);
+        }
+
+        let infcx = self.infcx;
+        let a = infcx.shallow_resolve_const(a);
+        let b = infcx.shallow_resolve_const(b);
+
+        match (a.kind(), b.kind()) {
+            (
+                ty::ConstKind::Infer(ty::InferConst::Var(a_vid)),
+                ty::ConstKind::Infer(ty::InferConst::Var(b_vid)),
+            ) => {
+                infcx.equate_const_vids_raw(a_vid, b_vid);
+            }
+
+            (ty::ConstKind::Infer(ty::InferConst::Var(a_vid)), _) => {
+                infcx.equate_const_var_raw(a_vid, b);
+            }
+
+            (_, ty::ConstKind::Infer(ty::InferConst::Var(b_vid))) => {
+                infcx.equate_const_var_raw(b_vid, a);
+            }
+
+            _ => {
+                super_combine_consts(self.infcx, self, a, b)?;
+            }
+        }
+
+        Ok(a)
+    }
+
+    fn binders<T>(
+        &mut self,
+        a: ty::Binder<I, T>,
+        b: ty::Binder<I, T>,
+    ) -> RelateResult<I, ty::Binder<I, T>>
+    where
+        T: Relate<I>,
+    {
+        if a == b {
+            return Ok(a);
+        }
+
+        // If they have no bound vars, relate normally.
+        if let Some(a_inner) = a.no_bound_vars()
+            && let Some(b_inner) = b.no_bound_vars()
+        {
+            self.relate(a_inner, b_inner)?;
+            return Ok(a);
+        }
+
+        self.infcx.enter_forall_with_empty_assumptions(b, |b| {
+            let a = self.infcx.instantiate_binder_with_infer(a);
+            self.relate(a, b)
+        })?;
+
+        // Check if `exists<..> B == for<..> A`.
+        self.infcx.enter_forall_with_empty_assumptions(a, |a| {
+            let b = self.infcx.instantiate_binder_with_infer(b);
+            self.relate(a, b)
+        })?;
+        Ok(a)
+    }
+}
+
+impl<Infcx, I> PredicateEmittingRelation<Infcx> for ResponseRelating<'_, Infcx, I>
+where
+    Infcx: InferCtxtLike<Interner = I>,
+    I: Interner,
+{
+    fn span(&self) -> I::Span {
+        Span::dummy()
+    }
+
+    fn param_env(&self) -> I::ParamEnv {
+        self.param_env
+    }
+
+    fn structurally_relate_aliases(&self) -> StructurallyRelateAliases {
+        StructurallyRelateAliases::Yes
+    }
+
+    fn register_predicates(
+        &mut self,
+        _obligations: impl IntoIterator<Item: ty::Upcast<I, I::Predicate>>,
+    ) {
+        panic!("we shouldn't register any goal when unifying response with original values");
+    }
+
+    fn register_goals(&mut self, _obligations: impl IntoIterator<Item = Goal<I, I::Predicate>>) {
+        panic!("we shouldn't register any goal when unifying response with original values");
+    }
+
+    fn register_alias_relate_predicate(&mut self, _a: I::Ty, _b: I::Ty) {
+        panic!("we shouldn't register any goal when unifying response with original values");
+    }
+}
+
 /// Unify the `original_values` with the `var_values` returned by the canonical query..
 ///
 /// This assumes that this unification will always succeed. This is the case when
@@ -265,9 +458,8 @@ fn unify_query_var_values<D, I>(
     assert_eq!(original_values.len(), var_values.len());
 
     for (&orig, response) in iter::zip(original_values, var_values.var_values.iter()) {
-        let goals =
-            delegate.eq_structurally_relating_aliases(param_env, orig, response, span).unwrap();
-        assert!(goals.is_empty());
+        let mut must_eq = ResponseRelating::new(&**delegate, param_env, span);
+        must_eq.relate(orig, response).unwrap();
     }
 }
 

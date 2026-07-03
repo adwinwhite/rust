@@ -7,8 +7,8 @@ use rustc_middle::ty::{self, Ty, TyCtxt, TypeFoldable};
 use rustc_span::{DUMMY_SP, ErrorGuaranteed, Span};
 
 use super::{
-    BoundRegionConversionTime, InferCtxt, OpaqueTypeStorageEntries, RegionVariableOrigin,
-    SubregionOrigin,
+    BoundRegionConversionTime, ConstVariableValue, InferCtxt, OpaqueTypeStorageEntries,
+    RegionVariableOrigin, SubregionOrigin,
 };
 
 impl<'tcx> rustc_type_ir::InferCtxtLike for InferCtxt<'tcx> {
@@ -249,6 +249,17 @@ impl<'tcx> rustc_type_ir::InferCtxtLike for InferCtxt<'tcx> {
 
     fn equate_const_vids_raw(&self, a: ty::ConstVid, b: ty::ConstVid) {
         self.inner.borrow_mut().const_unification_table().union(a, b);
+    }
+
+    fn equate_ty_var_raw(&self, vid: ty::TyVid, ty: Ty<'tcx>) {
+        self.inner.borrow_mut().type_variables().instantiate(vid, ty)
+    }
+
+    fn equate_const_var_raw(&self, vid: ty::ConstVid, ct: ty::Const<'tcx>) {
+        self.inner
+            .borrow_mut()
+            .const_unification_table()
+            .union_value(vid, ConstVariableValue::Known { value: ct })
     }
 
     fn instantiate_ty_var_raw<R: PredicateEmittingRelation<Self>>(
