@@ -16,7 +16,7 @@ use rustc_index::IndexVec;
 use rustc_type_ir::inherent::*;
 use rustc_type_ir::relate::combine::PredicateEmittingRelation;
 use rustc_type_ir::relate::{
-    Relate, RelateResult, TypeRelation, VarianceDiagInfo, relate_args_invariantly,
+    self, Relate, RelateResult, TypeRelation, VarianceDiagInfo, relate_args_invariantly,
 };
 use rustc_type_ir::{
     self as ty, Canonical, CanonicalVarKind, CanonicalVarValues, InferCtxtLike, Interner,
@@ -322,40 +322,10 @@ where
             }
 
             (ty::Infer(ty::TyVar(a_vid)), _) => {
-                // FIXME: we need to expose several more methods to
-                // `InferCtxtLike` so that we can use them here.
-                //
-                // This is what we do in generalization.
-                // If we don't do this, the response will contain values in
-                // higher universes.
-                let b = ty::fold_region(infcx.cx(), b, |r, i| {
-                    let var_universe = infcx.universe_of_ty(a_vid).unwrap();
-                    let r_universe = self.infcx.universe_of_region(r);
-                    if var_universe.can_name(r_universe) {
-                        r
-                    } else {
-                        infcx.next_region_var_in_universe(
-                            RegionVariableOrigin::Misc(self.span),
-                            var_universe,
-                        )
-                    }
-                });
                 infcx.instantiate_ty_var_eq_raw(a_vid, b);
             }
 
             (_, ty::Infer(ty::TyVar(b_vid))) => {
-                let a = ty::fold_region(infcx.cx(), a, |r, i| {
-                    let var_universe = infcx.universe_of_ty(b_vid).unwrap();
-                    let r_universe = self.infcx.universe_of_region(r);
-                    if var_universe.can_name(r_universe) {
-                        r
-                    } else {
-                        infcx.next_region_var_in_universe(
-                            RegionVariableOrigin::Misc(self.span),
-                            var_universe,
-                        )
-                    }
-                });
                 infcx.instantiate_ty_var_eq_raw(b_vid, a);
             }
 

@@ -1,4 +1,7 @@
 //! Definition of `InferCtxtLike` from the librarified type layer.
+
+#![allow(rustc::usage_of_type_ir_traits)]
+
 use rustc_hir::def_id::DefId;
 use rustc_middle::traits::ObligationCause;
 use rustc_middle::ty::relate::RelateResult;
@@ -253,11 +256,20 @@ impl<'tcx> rustc_type_ir::InferCtxtLike for InferCtxt<'tcx> {
     }
 
     fn instantiate_ty_var_eq_raw(&self, vid: ty::TyVid, ty: Ty<'tcx>) {
+        // This is what we do in generalization.
+        // The response may contain regions in higher universes.
+        let ty = ty::fold_regions(self.cx(), ty, |r, _| {
+            let var_universe = self.universe_of_ty(vid).unwrap();
+            let r_universe = self.universe_of_region(r);
+            if var_universe.can_name(r_universe) {
+                r
+            } else {
+                self.next_region_var_in_universe(RegionVariableOrigin::Misc(DUMMY_SP), var_universe)
+            }
+        });
+
         #[cfg(debug_assertions)]
         {
-            // Compared to the inherent methods, the function on `InferCtxtLike`
-            // is easier to understand.
-            #[allow(rustc::usage_of_type_ir_traits)]
             let var_universe = self.universe_of_ty(vid).unwrap();
             let ty_universe = max_universe(self, ty);
             assert!(
@@ -272,9 +284,6 @@ impl<'tcx> rustc_type_ir::InferCtxtLike for InferCtxt<'tcx> {
     fn instantiate_const_var_eq_raw(&self, vid: ty::ConstVid, ct: ty::Const<'tcx>) {
         #[cfg(debug_assertions)]
         {
-            // Compared to the inherent methods, the function on `InferCtxtLike`
-            // is easier to understand.
-            #[allow(rustc::usage_of_type_ir_traits)]
             let universe = self.universe_of_ct(vid).unwrap();
             assert!(universe.can_name(max_universe(self, ct)));
         }
@@ -367,13 +376,11 @@ impl<'tcx> rustc_type_ir::InferCtxtLike for InferCtxt<'tcx> {
         #[cfg(debug_assertions)]
         {
             let a = if let ty::ReVar(vid) = a.kind() {
-                #[allow(rustc::usage_of_type_ir_traits)]
                 self.opportunistic_resolve_lt_var(vid)
             } else {
                 a
             };
             let b = if let ty::ReVar(vid) = b.kind() {
-                #[allow(rustc::usage_of_type_ir_traits)]
                 self.opportunistic_resolve_lt_var(vid)
             } else {
                 b
@@ -381,9 +388,6 @@ impl<'tcx> rustc_type_ir::InferCtxtLike for InferCtxt<'tcx> {
             match (a.kind(), b.kind(), a, b) {
                 (ty::ReVar(_), ty::ReVar(_), _, _) => {}
                 (ty::ReVar(vid), _, _, reg) | (_, ty::ReVar(vid), reg, _) => {
-                    // Compared to the inherent methods, the function on `InferCtxtLike`
-                    // is easier to understand.
-                    #[allow(rustc::usage_of_type_ir_traits)]
                     let universe = self.universe_of_lt(vid).unwrap();
                     assert!(universe.can_name(max_universe(self, reg)));
                 }
