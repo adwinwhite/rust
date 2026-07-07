@@ -369,39 +369,6 @@ impl<'tcx> rustc_type_ir::InferCtxtLike for InferCtxt<'tcx> {
         vis: ty::VisibleForLeakCheck,
         span: Span,
     ) {
-        #[cfg(debug_assertions)]
-        {
-            let a = if let ty::ReVar(vid) = a.kind() {
-                self.inner
-                    .borrow_mut()
-                    .unwrap_region_constraints()
-                    .opportunistic_resolve_var(self.tcx, vid)
-            } else {
-                a
-            };
-            let b = if let ty::ReVar(vid) = b.kind() {
-                self.inner
-                    .borrow_mut()
-                    .unwrap_region_constraints()
-                    .opportunistic_resolve_var(self.tcx, vid)
-            } else {
-                b
-            };
-            match (a.kind(), b.kind(), a, b) {
-                (ty::ReVar(_), ty::ReVar(_), _, _) => {}
-                (ty::ReVar(vid), _, _, reg) | (_, ty::ReVar(vid), reg, _) => {
-                    let universe = self
-                        .inner
-                        .borrow_mut()
-                        .unwrap_region_constraints()
-                        .probe_value(vid)
-                        .unwrap_err();
-                    assert!(universe.can_name(max_universe(self, reg)));
-                }
-                _ => {}
-            }
-        }
-
         self.inner.borrow_mut().unwrap_region_constraints().make_eqregion(
             SubregionOrigin::RelateRegionParamBound(span, None),
             a,
