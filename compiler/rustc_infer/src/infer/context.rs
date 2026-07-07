@@ -1,5 +1,6 @@
 //! Definition of `InferCtxtLike` from the librarified type layer.
 
+use rustc_data_structures::sso::SsoHashMap;
 use rustc_hir::def_id::DefId;
 use rustc_middle::traits::ObligationCause;
 use rustc_middle::ty::relate::RelateResult;
@@ -257,6 +258,7 @@ impl<'tcx> rustc_type_ir::InferCtxtLike for InferCtxt<'tcx> {
         let ty = ty.fold_with(&mut UniverseFolder {
             infcx: self,
             for_universe: self.try_resolve_ty_var(vid).unwrap_err(),
+            cache: Default::default(),
         });
 
         #[cfg(debug_assertions)]
@@ -276,6 +278,7 @@ impl<'tcx> rustc_type_ir::InferCtxtLike for InferCtxt<'tcx> {
         let ct = ct.fold_with(&mut UniverseFolder {
             infcx: self,
             for_universe: self.try_resolve_const_var(vid).unwrap_err(),
+            cache: Default::default(),
         });
 
         #[cfg(debug_assertions)]
@@ -457,6 +460,7 @@ impl<'tcx> rustc_type_ir::InferCtxtLike for InferCtxt<'tcx> {
 struct UniverseFolder<'a, 'tcx> {
     infcx: &'a InferCtxt<'tcx>,
     for_universe: ty::UniverseIndex,
+    cache: SsoHashMap<Ty<'tcx>, Ty<'tcx>>,
 }
 impl<'a, 'tcx> ty::TypeFolder<TyCtxt<'tcx>> for UniverseFolder<'a, 'tcx> {
     fn cx(&self) -> TyCtxt<'tcx> {
@@ -468,21 +472,28 @@ impl<'a, 'tcx> ty::TypeFolder<TyCtxt<'tcx>> for UniverseFolder<'a, 'tcx> {
             return t;
         }
 
-        let ty::Infer(ty::TyVar(vid)) = t.kind() else {
-            return t.super_fold_with(self);
+        if let Some(&answer) = self.cache.get(&t) {
+            return answer;
+        }
+
+        let folded = if let ty::Infer(ty::TyVar(vid)) = t.kind() {
+            let vid = self.infcx.root_var(*vid);
+            let universe = self.infcx.try_resolve_ty_var(vid).unwrap_err();
+            if self.for_universe.can_name(universe) {
+                t
+            } else {
+                let mut inner = self.infcx.inner.borrow_mut();
+                let origin = inner.type_variables().var_origin(vid);
+                let new_var_id = inner.type_variables().new_var(self.for_universe, origin);
+                inner.type_variables().equate(vid, new_var_id);
+                Ty::new_var(self.cx(), new_var_id)
+            }
+        } else {
+            t.super_fold_with(self)
         };
 
-        let vid = self.infcx.root_var(*vid);
-        let universe = self.infcx.try_resolve_ty_var(vid).unwrap_err();
-        if self.for_universe.can_name(universe) {
-            t
-        } else {
-            let mut inner = self.infcx.inner.borrow_mut();
-            let origin = inner.type_variables().var_origin(vid);
-            let new_var_id = inner.type_variables().new_var(self.for_universe, origin);
-            inner.type_variables().equate(vid, new_var_id);
-            Ty::new_var(self.cx(), new_var_id)
-        }
+        self.cache.insert(t, folded);
+        folded
     }
 
     fn fold_const(&mut self, c: ty::Const<'tcx>) -> ty::Const<'tcx> {

@@ -382,31 +382,35 @@ where
 
     #[instrument(skip(self), level = "trace")]
     fn regions(&mut self, a: I::Region, b: I::Region) -> RelateResult<I, I::Region> {
-        #[cfg(debug_assertions)]
-        {
-            let a = if let ty::ReVar(vid) = a.kind() {
-                self.infcx.opportunistic_resolve_lt_var(vid)
-            } else {
-                a
-            };
-            let b = if let ty::ReVar(vid) = b.kind() {
-                self.infcx.opportunistic_resolve_lt_var(vid)
-            } else {
-                b
-            };
-            match (a.kind(), b.kind(), a, b) {
-                (ty::ReVar(_), ty::ReVar(_), _, _) => {}
-                (ty::ReVar(vid), _, _, reg) | (_, ty::ReVar(vid), reg, _) => {
-                    let universe = self.infcx.universe_of_lt(vid).unwrap();
-                    let reg_universe = ty::max_universe(self.infcx, reg);
-                    assert!(
-                        universe.can_name(reg_universe),
-                        "region var in universe {universe:?} can't name {reg:?} in universe {reg_universe:?}"
-                    );
-                }
-                _ => {}
-            }
-        }
+        // We can't check these in `equate_regions` as we do encounter higher universes.
+        // We can't check here either because proof tree visitor is so weird and we
+        // have newly created original_values in lower universe.
+        // See https://github.com/rust-lang/rust/pull/154329#discussion_r3491922162
+        // #[cfg(debug_assertions)]
+        // {
+        // let a = if let ty::ReVar(vid) = a.kind() {
+        // self.infcx.opportunistic_resolve_lt_var(vid)
+        // } else {
+        // a
+        // };
+        // let b = if let ty::ReVar(vid) = b.kind() {
+        // self.infcx.opportunistic_resolve_lt_var(vid)
+        // } else {
+        // b
+        // };
+        // match (a.kind(), b.kind(), a, b) {
+        // (ty::ReVar(_), ty::ReVar(_), _, _) => {}
+        // (ty::ReVar(vid), _, _, reg) | (_, ty::ReVar(vid), reg, _) => {
+        // let universe = self.infcx.universe_of_lt(vid).unwrap();
+        // let reg_universe = ty::max_universe(self.infcx, reg);
+        // assert!(
+        // universe.can_name(reg_universe),
+        // "region var in universe {universe:?} can't name {reg:?} in universe {reg_universe:?}"
+        // );
+        // }
+        // _ => {}
+        // }
+        // }
 
         self.infcx.equate_regions(a, b, VisibleForLeakCheck::Yes, self.span);
 
