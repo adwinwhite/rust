@@ -7,7 +7,7 @@ use rustc_middle::ty::relate::RelateResult;
 use rustc_middle::ty::relate::combine::PredicateEmittingRelation;
 use rustc_middle::ty::{self, Ty, TyCtxt, TypeFoldable};
 use rustc_span::{DUMMY_SP, ErrorGuaranteed, Span};
-use rustc_type_ir::{TypeSuperFoldable, TypeVisitableExt};
+use rustc_type_ir::{TypeSuperFoldable, TypeVisitableExt, max_universe};
 
 use super::type_variable::TypeVariableValue;
 use super::{
@@ -262,6 +262,16 @@ impl<'tcx> rustc_type_ir::InferCtxtLike for InferCtxt<'tcx> {
             cache: Default::default(),
         });
 
+        #[cfg(debug_assertions)]
+        {
+            let var_universe = self.try_resolve_ty_var(vid).unwrap_err();
+            let ty_universe = max_universe(self, ty);
+            assert!(
+                var_universe.can_name(ty_universe),
+                "var in universe {var_universe:?} can't name {ty:?} in universe {ty_universe:?}"
+            );
+        }
+
         self.inner.borrow_mut().type_variables().instantiate(vid, ty)
     }
 
@@ -271,6 +281,16 @@ impl<'tcx> rustc_type_ir::InferCtxtLike for InferCtxt<'tcx> {
             for_universe: self.try_resolve_const_var(vid).unwrap_err(),
             cache: Default::default(),
         });
+
+        #[cfg(debug_assertions)]
+        {
+            let var_universe = self.try_resolve_const_var(vid).unwrap_err();
+            let ct_universe = max_universe(self, ct);
+            assert!(
+                var_universe.can_name(ct_universe),
+                "var in universe {var_universe:?} can't name {ty:?} in universe {ct_universe:?}"
+            );
+        }
 
         self.inner
             .borrow_mut()
