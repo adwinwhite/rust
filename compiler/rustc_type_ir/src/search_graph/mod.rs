@@ -112,6 +112,12 @@ pub trait Delegate: Sized {
         input: <Self::Cx as Cx>::Input,
         inspect: &mut Self::ProofTreeBuilder,
     ) -> <Self::Cx as Cx>::Result;
+
+    fn normalize_goal(
+        search_graph: &mut SearchGraph<Self>,
+        cx: Self::Cx,
+        input: <Self::Cx as Cx>::Input,
+    ) -> (<Self::Cx as Cx>::Input, Vec<<Self::Cx as Cx>::Input>);
 }
 
 /// In the initial iteration of a cycle, we do not yet have a provisional
@@ -771,6 +777,15 @@ impl<D: Delegate<Cx = X>, X: Cx> SearchGraph<D> {
         });
         let evaluation_result = this.evaluate_goal_in_task(cx, input, inspect);
         evaluation_result.result
+    }
+
+    #[instrument(level = "debug", skip(self, cx, inspect), ret)]
+    pub fn normalize_goal(
+        &mut self,
+        cx: X,
+        input: X::Input,
+    ) -> (X::Input, Vec<X::Input>) {
+        todo!()
     }
 
     /// Probably the most involved method of the whole solver.

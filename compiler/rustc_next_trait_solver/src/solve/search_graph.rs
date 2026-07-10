@@ -149,6 +149,22 @@ where
             })
         })
     }
+
+    fn normalize_goal(
+        search_graph: &mut SearchGraph<D>,
+        cx: I,
+        input: CanonicalInput<I>,
+    ) -> (CanonicalInput<I>, Vec<CanonicalInput<I>>) {
+        ensure_sufficient_stack(|| {
+            EvalCtxt::enter_canonical(cx, search_graph, input, inspect, |ecx, goal| {
+                // if we're in `RerunNonErased`, don't even bother with inspect, and immediately return
+                let result = ecx.compute_goal(goal).map_err_to_rerun()?;
+
+                ecx.inspect.query_result(result);
+                result.map_err(Into::into)
+            })
+        })
+    }
 }
 
 fn response_no_constraints<I: Interner>(
