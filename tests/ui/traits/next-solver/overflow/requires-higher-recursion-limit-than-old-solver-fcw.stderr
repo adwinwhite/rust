@@ -1,0 +1,24 @@
+warning: reached the recursion limit 8 when resolving trait bounds
+  --> $DIR/requires-higher-recursion-limit-than-old-solver-fcw.rs:16:5
+   |
+LL |     require_sync::<Foo<Foo<Foo<Foo<Foo<Foo<()>>>>>>>();
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: consider increasing it by adding a `#![recursion_limit = "larger_number"]`
+   = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+   = note: for more information, see issue #159228 <https://github.com/rust-lang/rust/issues/159228>
+   = note: `#[warn(next_trait_solver_overflow)]` (part of `#[warn(future_incompatible)]`) on by default
+
+warning: reached the recursion limit 8 when resolving trait bounds
+  --> $DIR/requires-higher-recursion-limit-than-old-solver-fcw.rs:16:5
+   |
+LL |     require_sync::<Foo<Foo<Foo<Foo<Foo<Foo<()>>>>>>>();
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: consider increasing it by adding a `#![recursion_limit = "larger_number"]`
+   = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+   = note: for more information, see issue #159228 <https://github.com/rust-lang/rust/issues/159228>
+   = note: duplicate diagnostic emitted due to `-Z deduplicate-diagnostics=no`
+
+warning: 2 warnings emitted
+

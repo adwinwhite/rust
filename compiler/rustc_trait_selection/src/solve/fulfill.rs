@@ -9,7 +9,7 @@ use rustc_infer::traits::{
 use rustc_middle::ty::{self, TyCtxt, TyVid, TypeVisitableExt, TypingMode};
 use rustc_next_trait_solver::delegate::SolverDelegate as _;
 use rustc_next_trait_solver::solve::{
-    GoalEvaluation, GoalStalledOn, HasChanged, MaybeInfo, SolverDelegateEvalExt as _,
+    GoalEvaluation, GoalStalledOn, HasChanged, MaybeCause, MaybeInfo, SolverDelegateEvalExt as _,
     StalledOnCoroutines,
 };
 use thin_vec::ThinVec;
@@ -22,9 +22,15 @@ use crate::traits::{FulfillmentError, ScrubbedTraitError};
 
 mod derive_errors;
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Overflowed {
+    Yes,
+    No,
+}
+
 // FIXME: Do we need to use a `ThinVec` here?
 type PendingObligations<'tcx> =
-    ThinVec<(PredicateObligation<'tcx>, Option<GoalStalledOn<TyCtxt<'tcx>>>)>;
+    ThinVec<(PredicateObligation<'tcx>, Option<GoalStalledOn<TyCtxt<'tcx>>>, Overflowed)>;
 
 /// A trait engine using the new trait solver.
 ///
@@ -64,8 +70,9 @@ impl<'tcx> ObligationStorage<'tcx> {
         &mut self,
         obligation: PredicateObligation<'tcx>,
         stalled_on: Option<GoalStalledOn<TyCtxt<'tcx>>>,
+        overflowed: Overflowed,
     ) {
-        self.pending.push((obligation, stalled_on));
+        self.pending.push((obligation, stalled_on, overflowed));
     }
 
     fn has_pending_obligations(&self) -> bool {
@@ -74,7 +81,7 @@ impl<'tcx> ObligationStorage<'tcx> {
 
     fn clone_pending(&self) -> PredicateObligations<'tcx> {
         let mut obligations: PredicateObligations<'tcx> =
-            self.pending.iter().map(|(o, _)| o.clone()).collect();
+            self.pending.iter().map(|(o, _, _)| o.clone()).collect();
         obligations.extend(self.overflowed.iter().cloned());
         obligations
     }
@@ -87,7 +94,7 @@ impl<'tcx> ObligationStorage<'tcx> {
         let mut obligations: PredicateObligations<'tcx> = self
             .pending
             .iter()
-            .filter(|(_, stalled_on)| {
+            .filter(|(_, stalled_on, _)| {
                 let Some(stalled_on) = stalled_on else { return true };
                 // Don't reuse the sub-unification roots cached on `stalled_on`:
                 // a later sub-unification merge can have changed which root
@@ -104,7 +111,7 @@ impl<'tcx> ObligationStorage<'tcx> {
                     },
                 )
             })
-            .map(|(o, _)| o.clone())
+            .map(|(o, _, _)| o.clone())
             .collect();
         obligations.extend(self.overflowed.iter().cloned());
         obligations
@@ -112,10 +119,14 @@ impl<'tcx> ObligationStorage<'tcx> {
 
     fn drain_pending(
         &mut self,
-        cond: impl Fn(&PredicateObligation<'tcx>, &Option<GoalStalledOn<TyCtxt<'tcx>>>) -> bool,
+        cond: impl Fn(
+            &PredicateObligation<'tcx>,
+            &Option<GoalStalledOn<TyCtxt<'tcx>>>,
+            &Overflowed,
+        ) -> bool,
     ) -> PendingObligations<'tcx> {
         let (unstalled, pending) =
-            mem::take(&mut self.pending).into_iter().partition(|(o, s)| cond(o, s));
+            mem::take(&mut self.pending).into_iter().partition(|(o, s, ov)| cond(o, s, ov));
         self.pending = pending;
         unstalled
     }
@@ -129,7 +140,7 @@ impl<'tcx> ObligationStorage<'tcx> {
             // change.
             self.overflowed.extend(
                 self.pending
-                    .extract_if(.., |(o, stalled_on)| {
+                    .extract_if(.., |(o, stalled_on, _)| {
                         let goal = o.as_goal();
                         let result = <&SolverDelegate<'tcx>>::from(infcx).evaluate_root_goal(
                             goal,
@@ -138,13 +149,16 @@ impl<'tcx> ObligationStorage<'tcx> {
                         );
                         matches!(result, Ok(GoalEvaluation { has_changed: HasChanged::Yes, .. }))
                     })
-                    .map(|(o, _)| o),
+                    .map(|(o, _, _)| o),
             );
         })
     }
 }
 
-impl<'tcx, E: 'tcx> FulfillmentCtxt<'tcx, E> {
+impl<'tcx, E: 'tcx> FulfillmentCtxt<'tcx, E>
+where
+    E: FromSolverError<'tcx, NextSolverError<'tcx>>,
+{
     pub fn new(infcx: &InferCtxt<'tcx>) -> FulfillmentCtxt<'tcx, E> {
         assert!(
             infcx.next_trait_solver(),
@@ -172,43 +186,27 @@ impl<'tcx, E: 'tcx> FulfillmentCtxt<'tcx, E> {
             (inspector)(infcx, &obligation, result);
         }
     }
-}
 
-impl<'tcx, E> TraitEngine<'tcx, E> for FulfillmentCtxt<'tcx, E>
-where
-    E: FromSolverError<'tcx, NextSolverError<'tcx>>,
-{
-    #[instrument(level = "trace", skip(self, infcx))]
-    fn register_predicate_obligation(
+    #[instrument(level = "debug", skip(self, infcx))]
+    fn try_evaluate_obligations_inner(
         &mut self,
         infcx: &InferCtxt<'tcx>,
-        obligation: PredicateObligation<'tcx>,
-    ) {
+        run_with_double_depth_and_emit_fcw: bool,
+    ) -> Vec<E> {
         assert_eq!(self.usable_in_snapshot, infcx.num_open_snapshots());
-        self.obligations.register(obligation, None);
-    }
-
-    fn collect_remaining_errors(&mut self, infcx: &InferCtxt<'tcx>) -> Vec<E> {
-        self.obligations
-            .pending
-            .drain(..)
-            .map(|(obligation, _)| NextSolverError::Ambiguity(obligation))
-            .chain(
-                self.obligations
-                    .overflowed
-                    .drain(..)
-                    .map(|obligation| NextSolverError::Overflow(obligation)),
-            )
-            .map(|e| E::from_solver_error(infcx, e))
-            .collect()
-    }
-
-    fn try_evaluate_obligations(&mut self, infcx: &InferCtxt<'tcx>) -> Vec<E> {
-        assert_eq!(self.usable_in_snapshot, infcx.num_open_snapshots());
+        if run_with_double_depth_and_emit_fcw {
+            for (_, stalled_on, overflowed) in &mut self.obligations.pending {
+                if *overflowed == Overflowed::Yes {
+                    *stalled_on = None;
+                }
+            }
+        }
         let mut errors = Vec::new();
         loop {
             let mut any_changed = false;
-            for (mut obligation, stalled_on) in self.obligations.drain_pending(|_, _| true) {
+            for (mut obligation, stalled_on, overflowed) in
+                self.obligations.drain_pending(|_, _, _| true)
+            {
                 if !infcx.tcx.recursion_limit().value_within_limit(obligation.recursion_depth) {
                     self.obligations.on_fulfillment_overflow(infcx);
                     // Only return true errors that we have accumulated while processing.
@@ -229,14 +227,32 @@ where
                         //
                         // Only goals proven via the trait solver should be region dependent.
                         Certainty::Yes => {}
+                        // The fast path doesn't return overflowed certainty currently. This is
+                        // guarding against future changes.
+                        Certainty::Maybe(MaybeInfo {
+                            cause: MaybeCause::Overflow { .. }, ..
+                        }) => {
+                            self.obligations.register(obligation, None, Overflowed::Yes);
+                        }
                         Certainty::Maybe(_) => {
-                            self.obligations.register(obligation, None);
+                            self.obligations.register(obligation, None, Overflowed::No);
                         }
                     }
                     continue;
                 }
 
-                let result = delegate.evaluate_root_goal(goal, obligation.cause.span, stalled_on);
+                let root_depth =
+                    if run_with_double_depth_and_emit_fcw && overflowed == Overflowed::Yes {
+                        infcx.tcx.recursion_limit().0 * 2
+                    } else {
+                        infcx.tcx.recursion_limit().0
+                    };
+                let result = delegate.evaluate_root_goal_with_depth(
+                    goal,
+                    obligation.cause.span,
+                    stalled_on,
+                    root_depth,
+                );
                 self.inspect_evaluated_obligation(infcx, &obligation, &result);
                 let GoalEvaluation { goal, certainty, has_changed, stalled_on } = match result {
                     Ok(result) => result,
@@ -266,6 +282,8 @@ where
 
                 match certainty {
                     Certainty::Yes => {
+                        let span = obligation.cause.span;
+
                         // Goals may depend on structural identity. Region uniquification at the
                         // start of MIR borrowck may cause things to no longer be so, potentially
                         // causing an ICE.
@@ -282,8 +300,31 @@ where
                         {
                             infcx.push_hir_typeck_potentially_region_dependent_goal(obligation);
                         }
+
+                        if run_with_double_depth_and_emit_fcw {
+                            infcx.tcx.emit_node_span_lint(
+                                rustc_session::lint::builtin::NEXT_TRAIT_SOLVER_OVERFLOW,
+                                rustc_hir::CRATE_HIR_ID,
+                                span,
+                                rustc_errors::DiagDecorator(|diag| {
+                                    diag.primary_message(format!(
+                                        "reached the recursion limit {} when resolving trait bounds",
+                                        infcx.tcx.recursion_limit().0
+                                    ));
+                                    diag.help(format!(
+                                        "consider increasing it by adding a `#![recursion_limit = \"{}\"]`",
+                                        infcx.tcx.recursion_limit().0 * 2
+                                    ));
+                                }),
+                            )
+                        }
                     }
-                    Certainty::Maybe(_) => self.obligations.register(obligation, stalled_on),
+                    Certainty::Maybe(MaybeInfo { cause: MaybeCause::Overflow { .. }, .. }) => {
+                        self.obligations.register(obligation, stalled_on, Overflowed::Yes);
+                    }
+                    Certainty::Maybe(_) => {
+                        self.obligations.register(obligation, stalled_on, Overflowed::No)
+                    }
                 }
             }
 
@@ -293,6 +334,47 @@ where
         }
 
         errors
+    }
+}
+
+impl<'tcx, E> TraitEngine<'tcx, E> for FulfillmentCtxt<'tcx, E>
+where
+    E: FromSolverError<'tcx, NextSolverError<'tcx>>,
+{
+    #[instrument(level = "trace", skip(self, infcx))]
+    fn register_predicate_obligation(
+        &mut self,
+        infcx: &InferCtxt<'tcx>,
+        obligation: PredicateObligation<'tcx>,
+    ) {
+        assert_eq!(self.usable_in_snapshot, infcx.num_open_snapshots());
+        self.obligations.register(obligation, None, Overflowed::No);
+    }
+
+    fn collect_remaining_errors(&mut self, infcx: &InferCtxt<'tcx>) -> Vec<E> {
+        self.obligations
+            .pending
+            .drain(..)
+            .map(|(obligation, _, _)| NextSolverError::Ambiguity(obligation))
+            .chain(
+                self.obligations
+                    .overflowed
+                    .drain(..)
+                    .map(|obligation| NextSolverError::Overflow(obligation)),
+            )
+            .map(|e| E::from_solver_error(infcx, e))
+            .collect()
+    }
+
+    fn try_evaluate_obligations(&mut self, infcx: &InferCtxt<'tcx>) -> Vec<E> {
+        self.try_evaluate_obligations_inner(infcx, false)
+    }
+
+    fn try_evaluate_obligations_emitting_overflow_fcw(
+        &mut self,
+        infcx: &InferCtxt<'tcx>,
+    ) -> Vec<E> {
+        self.try_evaluate_obligations_inner(infcx, true)
     }
 
     fn has_pending_obligations(&self) -> bool {
@@ -335,7 +417,7 @@ where
         }
 
         self.obligations
-            .drain_pending(|_, stalled_on| {
+            .drain_pending(|_, stalled_on, _| {
                 stalled_on.as_ref().is_some_and(|s| match s.stalled_certainty {
                     Certainty::Maybe(MaybeInfo {
                         cause: _,
@@ -346,7 +428,7 @@ where
                 })
             })
             .into_iter()
-            .map(|(o, _)| o)
+            .map(|(o, _, _)| o)
             .collect()
     }
 }

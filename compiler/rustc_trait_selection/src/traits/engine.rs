@@ -228,6 +228,11 @@ where
         self.engine.borrow_mut().evaluate_obligations_error_on_ambiguity(self.infcx)
     }
 
+    #[must_use]
+    pub fn evaluate_obligations_emitting_overflow_fcw(&self) -> Vec<E> {
+        self.engine.borrow_mut().evaluate_obligations_emitting_overflow_fcw(self.infcx)
+    }
+
     /// Returns the not-yet-processed and stalled obligations from the
     /// `ObligationCtxt`.
     ///

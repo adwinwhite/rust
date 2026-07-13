@@ -167,6 +167,13 @@ where
         self.select(selcx)
     }
 
+    fn try_evaluate_obligations_emitting_overflow_fcw(
+        &mut self,
+        _infcx: &InferCtxt<'tcx>,
+    ) -> Vec<E> {
+        bug!("`try_evaluate_obligations_emitting_overflow_fcw` called in the old solver")
+    }
+
     fn drain_stalled_obligations_for_coroutines(
         &mut self,
         infcx: &InferCtxt<'tcx>,

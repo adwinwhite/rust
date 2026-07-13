@@ -84,6 +84,10 @@ pub trait TraitEngine<'tcx, E: 'tcx>: 'tcx {
     #[must_use]
     fn try_evaluate_obligations(&mut self, infcx: &InferCtxt<'tcx>) -> Vec<E>;
 
+    #[must_use]
+    fn try_evaluate_obligations_emitting_overflow_fcw(&mut self, infcx: &InferCtxt<'tcx>)
+    -> Vec<E>;
+
     fn collect_remaining_errors(&mut self, infcx: &InferCtxt<'tcx>) -> Vec<E>;
 
     /// Evaluate all pending obligations, return error if they can't be evaluated.
@@ -99,6 +103,23 @@ pub trait TraitEngine<'tcx, E: 'tcx>: 'tcx {
         let errors = self.try_evaluate_obligations(infcx);
         if !errors.is_empty() {
             return errors;
+        }
+
+        self.collect_remaining_errors(infcx)
+    }
+
+    #[must_use]
+    fn evaluate_obligations_emitting_overflow_fcw(&mut self, infcx: &InferCtxt<'tcx>) -> Vec<E> {
+        let errors = self.try_evaluate_obligations(infcx);
+        if !errors.is_empty() {
+            return errors;
+        }
+
+        if infcx.tcx.next_trait_solver_globally() {
+            let errors = self.try_evaluate_obligations_emitting_overflow_fcw(infcx);
+            if !errors.is_empty() {
+                return errors;
+            }
         }
 
         self.collect_remaining_errors(infcx)

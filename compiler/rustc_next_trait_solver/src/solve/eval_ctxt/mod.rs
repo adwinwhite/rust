@@ -180,6 +180,17 @@ pub trait SolverDelegateEvalExt: SolverDelegate {
         stalled_on: Option<GoalStalledOn<Self::Interner>>,
     ) -> Result<GoalEvaluation<Self::Interner>, NoSolution>;
 
+    /// This is only used to emit the next solver overflow FCW.
+    ///
+    /// You should use `evaluate_root_goal` instead.
+    fn evaluate_root_goal_with_depth(
+        &self,
+        goal: Goal<Self::Interner, <Self::Interner as Interner>::Predicate>,
+        span: <Self::Interner as Interner>::Span,
+        stalled_on: Option<GoalStalledOn<Self::Interner>>,
+        root_depth: usize,
+    ) -> Result<GoalEvaluation<Self::Interner>, NoSolution>;
+
     /// Checks whether evaluating `goal` may hold while treating not-yet-defined
     /// opaque types as being kind of rigid.
     ///
@@ -219,14 +230,24 @@ where
     D: SolverDelegate<Interner = I>,
     I: Interner,
 {
-    #[instrument(level = "debug", skip(self), ret)]
     fn evaluate_root_goal(
         &self,
         goal: Goal<I, I::Predicate>,
         span: I::Span,
         stalled_on: Option<GoalStalledOn<I>>,
     ) -> Result<GoalEvaluation<I>, NoSolution> {
-        let result = EvalCtxt::enter_root(self, self.cx().recursion_limit(), span, |ecx| {
+        self.evaluate_root_goal_with_depth(goal, span, stalled_on, self.cx().recursion_limit())
+    }
+
+    #[instrument(level = "debug", skip(self), ret)]
+    fn evaluate_root_goal_with_depth(
+        &self,
+        goal: Goal<I, I::Predicate>,
+        span: I::Span,
+        stalled_on: Option<GoalStalledOn<I>>,
+        root_depth: usize,
+    ) -> Result<GoalEvaluation<I>, NoSolution> {
+        let result = EvalCtxt::enter_root(self, root_depth, span, |ecx| {
             ecx.evaluate_goal(GoalSource::Misc, goal, stalled_on)
         });
 
