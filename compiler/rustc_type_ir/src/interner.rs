@@ -462,6 +462,8 @@ pub trait Interner:
         canonical_goal: CanonicalInput<Self>,
     ) -> (QueryResult<Self>, Self::Probe);
 
+    fn emit_next_solver_overflow_fcw(self, span: Option<Self::Span>);
+
     fn item_name(self, item_index: Self::DefId) -> Self::Symbol;
 }
 

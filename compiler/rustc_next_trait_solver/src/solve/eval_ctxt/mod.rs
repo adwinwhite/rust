@@ -226,9 +226,36 @@ where
         span: I::Span,
         stalled_on: Option<GoalStalledOn<I>>,
     ) -> Result<GoalEvaluation<I>, NoSolution> {
-        let result = EvalCtxt::enter_root(self, self.cx().recursion_limit(), span, |ecx| {
-            ecx.evaluate_goal(GoalSource::Misc, goal, stalled_on)
-        });
+        let eval_with_recursion_limit = |limit| {
+            EvalCtxt::enter_root(self, limit, span, |ecx| {
+                ecx.evaluate_goal(GoalSource::Misc, goal, stalled_on.clone())
+            })
+        };
+        let is_overflow = |eval_result| {
+            matches!(
+                eval_result,
+                &Ok(GoalEvaluation {
+                    certainty: Certainty::Maybe(MaybeInfo {
+                        cause: MaybeCause::Overflow { .. },
+                        ..
+                    }),
+                    ..
+                })
+            )
+        };
+
+        // The old solver doesn't check depth requirement when looking up cache
+        // while the next solver does so. Thus the next solver is more prone to
+        // overflow. We emit a FCW for this.
+        let mut result = eval_with_recursion_limit(self.cx().recursion_limit());
+        if is_overflow(&result) {
+            let result_with_doubled_limit =
+                eval_with_recursion_limit(self.cx().recursion_limit() * 2);
+            if !is_overflow(&result_with_doubled_limit) {
+                self.cx().emit_next_solver_overflow_fcw(Some(span));
+                result = result_with_doubled_limit;
+            }
+        }
 
         match result {
             Ok(i) => Ok(i),
@@ -1743,17 +1770,56 @@ pub fn evaluate_root_goal_for_proof_tree_raw_provider<
     cx: I,
     canonical_goal: CanonicalInput<I>,
 ) -> (QueryResult<I>, I::Probe) {
-    let mut inspect = inspect::ProofTreeBuilder::new();
-    let (canonical_result, accessed_opaques) = SearchGraph::<D>::evaluate_root_goal_for_proof_tree(
-        cx,
-        cx.recursion_limit(),
-        canonical_goal,
-        &mut inspect,
-    );
+    let eval_with_recursion_limit = |limit| {
+        let mut inspect = inspect::ProofTreeBuilder::new();
+        let result = SearchGraph::<D>::evaluate_root_goal_for_proof_tree(
+            cx,
+            limit,
+            canonical_goal,
+            &mut inspect,
+        );
+        (result, inspect)
+    };
+    let is_overflow = |eval_result| {
+        matches!(
+            eval_result,
+            &Ok(CanonicalResponse {
+                value: Response {
+                    certainty: Certainty::Maybe(MaybeInfo {
+                        cause: MaybeCause::Overflow { .. },
+                        ..
+                    }),
+                    ..
+                },
+                ..
+            })
+        )
+    };
+
+    // The old solver doesn't check depth requirement when looking up cache
+    // while the next solver does so. Thus the next solver is more prone to
+    // overflow. We emit a FCW for this.
+    let ((mut result, mut accessed_opaques), mut inspect) =
+        eval_with_recursion_limit(cx.recursion_limit());
+    if is_overflow(&result) {
+        let (
+            (result_with_doubled_limit, accessed_opaques_with_doubled_limit),
+            inspect_with_doubled_limit,
+        ) = eval_with_recursion_limit(cx.recursion_limit() * 2);
+        if !is_overflow(&result_with_doubled_limit) {
+            // FIXME: improve the FCW diagnostics. Currently we don't show
+            // which trait bound triggers this.
+            cx.emit_next_solver_overflow_fcw(None);
+            result = result_with_doubled_limit;
+            accessed_opaques = accessed_opaques_with_doubled_limit;
+            inspect = inspect_with_doubled_limit;
+        }
+    }
+
     let final_revision = inspect.unwrap();
 
     assert!(!accessed_opaques.might_rerun());
-    (canonical_result, cx.mk_probe(final_revision))
+    (result, cx.mk_probe(final_revision))
 }
 
 /// Evaluate a goal to build a proof tree.

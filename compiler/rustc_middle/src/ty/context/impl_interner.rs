@@ -5,6 +5,7 @@ use std::{debug_assert_matches, fmt};
 
 use rustc_errors::ErrorGuaranteed;
 use rustc_hir as hir;
+use rustc_hir::CRATE_HIR_ID;
 use rustc_hir::def::{CtorKind, DefKind};
 use rustc_hir::def_id::{DefId, LocalDefId};
 use rustc_hir::lang_items::LangItem;
@@ -788,6 +789,23 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
         canonical_goal: CanonicalInput<'tcx>,
     ) -> (QueryResult<'tcx>, &'tcx inspect::Probe<TyCtxt<'tcx>>) {
         self.evaluate_root_goal_for_proof_tree_raw(canonical_goal)
+    }
+
+    fn emit_next_solver_overflow_fcw(self, span: Option<Span>) {
+        self.emit_node_span_lint(
+            rustc_session::lint::builtin::NEXT_TRAIT_SOLVER_OVERFLOW,
+            CRATE_HIR_ID,
+            span.unwrap_or(DUMMY_SP),
+            rustc_errors::DiagDecorator(|diag| {
+                diag.primary_message(format!(
+                    "reached the recursion limit {} when resolving trait bounds",
+                    self.recursion_limit()
+                ));
+                diag.help(
+                    "consider increasing it by adding a `#![recursion_limit = \"larger_number\"]`",
+                );
+            }),
+        )
     }
 
     fn item_name(self, id: DefId) -> Symbol {
