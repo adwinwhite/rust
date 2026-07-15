@@ -720,7 +720,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
     #[instrument(skip(self), level = "debug")]
     pub(crate) fn report_ambiguity_errors(&self) {
-        let mut errors = self.fulfillment_cx.borrow_mut().collect_remaining_errors(self);
+        let mut errors =
+            self.fulfillment_cx.borrow_mut().evaluate_obligations_emitting_overflow_fcw(self);
 
         if !errors.is_empty() {
             self.adjust_fulfillment_errors_for_expr_obligation(&mut errors);

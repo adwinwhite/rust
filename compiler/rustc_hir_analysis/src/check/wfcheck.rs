@@ -175,7 +175,7 @@ where
     }
     f(&mut wfcx)?;
 
-    let errors = wfcx.evaluate_obligations_error_on_ambiguity();
+    let errors = wfcx.evaluate_obligations_emitting_overflow_fcw();
     if !errors.is_empty() {
         return Err(infcx.err_ctxt().report_fulfillment_errors(errors));
     }

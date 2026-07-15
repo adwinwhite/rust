@@ -322,7 +322,7 @@ fn do_normalize_predicates<'tcx>(
         predicates
     };
 
-    let errors = ocx.evaluate_obligations_error_on_ambiguity();
+    let errors = ocx.evaluate_obligations_emitting_overflow_fcw();
     if !errors.is_empty() {
         let reported = infcx.err_ctxt().report_fulfillment_errors(errors);
         return Err(reported);
