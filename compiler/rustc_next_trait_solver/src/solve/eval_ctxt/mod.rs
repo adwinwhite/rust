@@ -15,8 +15,8 @@ use rustc_type_ir::solve::{
     RerunNonErased, RerunReason, RerunResultExt, SmallCopyList,
 };
 use rustc_type_ir::{
-    self as ty, CanonicalVarValues, ClauseKind, InferCtxtLike, Interner, MayBeErased,
-    OpaqueTypeKey, PredicateKind, TypeFoldable, TypeSuperVisitable, TypeVisitable,
+    self as ty, CanonicalVarKind, CanonicalVarValues, ClauseKind, InferCtxtLike, Interner,
+    MayBeErased, OpaqueTypeKey, PredicateKind, TypeFoldable, TypeSuperVisitable, TypeVisitable,
     TypeVisitableExt, TypeVisitor, TypingMode,
 };
 use tracing::{Level, debug, instrument, trace, warn};
@@ -231,27 +231,41 @@ where
                 ecx.evaluate_goal(GoalSource::Misc, goal, stalled_on.clone())
             })
         };
-        let is_overflow = |eval_result| {
-            matches!(
-                eval_result,
-                &Ok(GoalEvaluation {
-                    certainty: Certainty::Maybe(MaybeInfo {
-                        cause: MaybeCause::Overflow { .. },
-                        ..
-                    }),
-                    ..
-                })
-            )
+        let is_overflow_and_has_no_stalled_infers = |eval_result| {
+            let &Ok(GoalEvaluation {
+                certainty: Certainty::Maybe(MaybeInfo { cause: MaybeCause::Overflow { .. }, .. }),
+                ref stalled_on,
+                goal,
+                ..
+            }) = eval_result
+            else {
+                return false;
+            };
+
+            let predicate: I::Predicate = goal.predicate;
+            match predicate.kind().skip_binder() {
+                ty::PredicateKind::Clause(ty::ClauseKind::Projection(projection)) => {
+                    let term: I::GenericArg = projection.term.into();
+                    stalled_on.as_ref().is_none_or(|s| s.stalled_vars.iter().any(|v| *v != term))
+                }
+                _ => {
+                    // FIXME: do we consider opaques here?
+                    stalled_on.as_ref().is_none_or(|s| s.stalled_vars.is_empty())
+                }
+            }
+        };
+        let is_certainty_yes = |eval_result| {
+            matches!(eval_result, &Ok(GoalEvaluation { certainty: Certainty::Yes, .. }))
         };
 
         // The old solver doesn't check depth requirement when looking up cache
         // while the next solver does so. Thus the next solver is more prone to
         // overflow. We emit a FCW for this.
         let mut result = eval_with_recursion_limit(self.cx().recursion_limit());
-        if is_overflow(&result) {
+        if is_overflow_and_has_no_stalled_infers(&result) {
             let result_with_doubled_limit =
                 eval_with_recursion_limit(self.cx().recursion_limit() * 2);
-            if !is_overflow(&result_with_doubled_limit) {
+            if is_certainty_yes(&result_with_doubled_limit) {
                 self.cx().emit_next_solver_overflow_fcw(Some(span));
                 result = result_with_doubled_limit;
             }
@@ -1780,19 +1794,70 @@ pub fn evaluate_root_goal_for_proof_tree_raw_provider<
         );
         (result, inspect)
     };
-    let is_overflow = |eval_result| {
-        matches!(
-            eval_result,
-            &Ok(CanonicalResponse {
-                value: Response {
-                    certainty: Certainty::Maybe(MaybeInfo {
-                        cause: MaybeCause::Overflow { .. },
-                        ..
-                    }),
+    let is_overflow_and_has_no_stalled_infers = |eval_result| {
+        let &Ok(CanonicalResponse {
+            value:
+                Response {
+                    certainty:
+                        Certainty::Maybe(MaybeInfo { cause: MaybeCause::Overflow { .. }, .. }),
                     ..
                 },
-                ..
-            })
+            ref var_kinds,
+            ..
+        }) = eval_result
+        else {
+            return false;
+        };
+        let var_kinds: &I::CanonicalVarKinds = var_kinds;
+        let is_non_region_infer = |var_kind| match var_kind {
+            CanonicalVarKind::Ty { .. }
+            | CanonicalVarKind::Int
+            | CanonicalVarKind::Float
+            | CanonicalVarKind::Const(_) => true,
+            CanonicalVarKind::Region(_)
+            | CanonicalVarKind::PlaceholderTy(_)
+            | CanonicalVarKind::PlaceholderRegion(..)
+            | CanonicalVarKind::PlaceholderConst(_) => false,
+        };
+        match canonical_goal.canonical.value.goal.predicate.kind().skip_binder() {
+            ty::PredicateKind::Clause(ty::ClauseKind::Projection(projection)) => {
+                // how to detect stalled vars in projection_term?
+                // just use var_kind and filter out the term kind.
+                let term_index = match projection.term.kind() {
+                    ty::TermKind::Ty(t) => {
+                        if let ty::Bound(ty::BoundVarIndexKind::Canonical, index) = t.kind() {
+                            Some(index.var)
+                        } else {
+                            None
+                        }
+                    }
+                    ty::TermKind::Const(c) => {
+                        if let ty::ConstKind::Bound(ty::BoundVarIndexKind::Canonical, index) =
+                            c.kind()
+                        {
+                            Some(index.var)
+                        } else {
+                            None
+                        }
+                    }
+                };
+                if let Some(index) = term_index {
+                    !var_kinds
+                        .iter()
+                        .enumerate()
+                        .any(|(i, kind)| i != index.as_usize() && is_non_region_infer(kind))
+                } else {
+                    !var_kinds.iter().any(|kind| is_non_region_infer(kind))
+                }
+            }
+            _ => !var_kinds.iter().any(|kind| is_non_region_infer(kind)),
+        }
+    };
+
+    let is_certainty_yes = |eval_result| {
+        matches!(
+            eval_result,
+            &Ok(CanonicalResponse { value: Response { certainty: Certainty::Yes, .. }, .. })
         )
     };
 
@@ -1801,12 +1866,12 @@ pub fn evaluate_root_goal_for_proof_tree_raw_provider<
     // overflow. We emit a FCW for this.
     let ((mut result, mut accessed_opaques), mut inspect) =
         eval_with_recursion_limit(cx.recursion_limit());
-    if is_overflow(&result) {
+    if is_overflow_and_has_no_stalled_infers(&result) {
         let (
             (result_with_doubled_limit, accessed_opaques_with_doubled_limit),
             inspect_with_doubled_limit,
         ) = eval_with_recursion_limit(cx.recursion_limit() * 2);
-        if !is_overflow(&result_with_doubled_limit) {
+        if is_certainty_yes(&result_with_doubled_limit) {
             // FIXME: improve the FCW diagnostics. Currently we don't show
             // which trait bound triggers this.
             cx.emit_next_solver_overflow_fcw(None);
