@@ -1,4 +1,5 @@
 use std::iter;
+use std::ops::ControlFlow;
 
 use rustc_data_structures::fx::FxIndexMap;
 use rustc_errors::ErrorGuaranteed;
@@ -13,7 +14,7 @@ use crate::query::LocalCrate;
 use crate::traits::specialization_graph;
 use crate::ty::fast_reject::{self, SimplifiedType, TreatParams};
 use crate::ty::print::{with_crate_prefix, with_no_trimmed_paths};
-use crate::ty::{Ident, Ty, TyCtxt};
+use crate::ty::{Ident, Ty, TyCtxt, VisitorResult};
 
 /// A trait's definition with type information.
 #[derive(StableHash, Encodable, Decodable)]
@@ -182,12 +183,20 @@ impl<'tcx> TyCtxt<'tcx> {
     /// Iterate over every impl that could possibly match the self type `self_ty`.
     ///
     /// `trait_def_id` MUST BE the `DefId` of a trait.
-    pub fn for_each_relevant_impl(
+    pub fn for_each_relevant_impl<R: VisitorResult>(
         self,
         trait_def_id: DefId,
         self_ty: Ty<'tcx>,
-        mut f: impl FnMut(DefId),
-    ) {
+        mut f: impl FnMut(DefId) -> R,
+    ) -> R {
+        macro_rules! ret {
+            ($e: expr) => {
+                match $e.branch() {
+                    ControlFlow::Break(b) => return R::from_residual(b),
+                    ControlFlow::Continue(()) => {}
+                }
+            };
+        }
         // FIXME: This depends on the set of all impls for the trait. That is
         // unfortunate wrt. incremental compilation.
         //
@@ -196,7 +205,7 @@ impl<'tcx> TyCtxt<'tcx> {
         let impls = self.trait_impls_of(trait_def_id);
 
         for &impl_def_id in impls.blanket_impls.iter() {
-            f(impl_def_id);
+            ret!(f(impl_def_id));
         }
 
         // This way, when searching for some impl for `T: Trait`, we do not look at any impls
@@ -208,14 +217,15 @@ impl<'tcx> TyCtxt<'tcx> {
         if let Some(simp) = fast_reject::simplify_type(self, self_ty, TreatParams::AsRigid) {
             if let Some(impls) = impls.non_blanket_impls.get(&simp) {
                 for &impl_def_id in impls {
-                    f(impl_def_id);
+                    ret!(f(impl_def_id));
                 }
             }
         } else {
             for &impl_def_id in impls.non_blanket_impls.values().flatten() {
-                f(impl_def_id);
+                ret!(f(impl_def_id));
             }
         }
+        R::output()
     }
 
     /// `trait_def_id` MUST BE the `DefId` of a trait.
