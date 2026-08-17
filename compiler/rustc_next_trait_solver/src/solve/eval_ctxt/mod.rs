@@ -352,7 +352,7 @@ fn maybe_evaluate_root_goal_with_higher_recursion_limit<D, I>(
         }
     });
     if let Ok(rerun_result) = rerun_result {
-        delegate.emit_next_solver_overflow_fcw(predicate, span);
+        delegate.emit_next_solver_overflow_fcw(goal, span);
         *initial_result = rerun_result;
     }
 }

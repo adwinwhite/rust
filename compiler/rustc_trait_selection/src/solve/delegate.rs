@@ -476,7 +476,7 @@ impl<'tcx> rustc_next_trait_solver::delegate::SolverDelegate for SolverDelegate<
         }
     }
 
-    fn emit_next_solver_overflow_fcw(&self, predicate: ty::Predicate<'tcx>, span: Span) {
+    fn emit_next_solver_overflow_fcw(&self, predicate: ty::Goal<'tcx, ty::Predicate<'tcx>>, span: Span) {
         let tcx = self.tcx;
         let predicate = self.resolve_vars_if_possible(predicate);
         tcx.emit_node_span_lint(
@@ -511,5 +511,50 @@ impl<'tcx> rustc_next_trait_solver::delegate::SolverDelegate for SolverDelegate<
                 diag.note("this lint is attached to the whole crate and can't be disabled on a per-function basis");
             }),
         )
+    }
+}
+
+struct OverflowGoalChain<'tcx> {
+}
+struct OverflowGoalChain<'tcx> {
+    span: Span,
+    predicates: Vec<ty::Predicate<'tcx>>,
+}
+
+impl<'tcx> ProofTreeVisitor<'tcx> for OverflowGoalChain<'tcx> {
+    type Result = ControlFlow<()>;
+
+    fn span(&self) -> Span {
+        self.span
+    }
+
+    fn visit_goal(&mut self, goal: &inspect::InspectGoal<'_, 'tcx>) -> Self::Result {
+        self.predicates.push(goal.goal.predicate);
+        match goal.result() {
+            Ok(Certainty::Yes) => ControlFlow::Continue(()),
+            Ok(Certainty::Maybe(MaybeInfo {
+                cause: MaybeCause::Ambiguity,
+                ..
+            })) => ControlFlow::Continue(()),
+            Err(NoSolution) => {
+                unreachable!()
+            }
+            Ok(Certainty::Maybe(MaybeInfo {
+                cause: MaybeCause::Overflow { .. },
+                ..
+            })) => {
+                if let Some(cand) = goal.unique_applicable_candidate()
+                {
+                    cand.visit_nested_in_probe(self)
+                } else {
+                    ControlFlow::Break(())
+                }
+            }
+        }
+        self.predicates.pop()
+    }
+
+    fn on_recursion_limit(&mut self) -> Self::Result {
+        ControlFlow::Break(())
     }
 }
