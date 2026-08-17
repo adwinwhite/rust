@@ -29,6 +29,10 @@ impl<'tcx> rustc_type_ir::InferCtxtLike for InferCtxt<'tcx> {
         self.enable_next_solver_overflow_fcw
     }
 
+    fn in_next_solver_overflow_fcw(&self) -> bool {
+        self.in_next_solver_overflow_fcw()
+    }
+
     fn disable_trait_solver_fast_paths(&self) -> bool {
         self.disable_trait_solver_fast_paths()
     }
