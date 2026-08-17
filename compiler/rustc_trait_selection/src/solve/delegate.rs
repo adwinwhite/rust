@@ -1,5 +1,5 @@
 use std::collections::hash_map::Entry;
-use std::ops::Deref;
+use std::ops::{ControlFlow, Deref};
 
 use rustc_data_structures::Limit;
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
@@ -13,7 +13,8 @@ use rustc_infer::infer::canonical::{
 };
 use rustc_infer::infer::{InferCtxt, RegionVariableOrigin, SubregionOrigin, TyCtxtInferExt};
 use rustc_infer::traits::solve::{
-    ComputeGoalFastPathOutcome, FetchEligibleAssocItemResponse, Goal, SucceededInErased,
+    ComputeGoalFastPathOutcome, FetchEligibleAssocItemResponse, Goal, MaybeCause, MaybeInfo,
+    SucceededInErased,
 };
 use rustc_middle::traits::query::NoSolution;
 use rustc_middle::traits::solve::Certainty;
@@ -26,6 +27,8 @@ use rustc_next_trait_solver::solve::{GoalStalledOn, GoalStalledOnOpaques};
 use rustc_span::{DUMMY_SP, Span};
 use thin_vec::{ThinVec, thin_vec};
 
+use super::inspect::InferCtxtProofTreeExt;
+use crate::solve::inspect::{self, ProofTreeVisitor};
 use crate::traits::{EvaluateConstErr, ObligationCause, sizedness_fast_path, specialization_graph};
 
 #[repr(transparent)]
@@ -476,29 +479,35 @@ impl<'tcx> rustc_next_trait_solver::delegate::SolverDelegate for SolverDelegate<
         }
     }
 
-    fn emit_next_solver_overflow_fcw(&self, predicate: ty::Predicate<'tcx>, span: Span) {
+    fn emit_next_solver_overflow_fcw(&self, goal: Goal<'tcx, ty::Predicate<'tcx>>, span: Span) {
         let tcx = self.tcx;
-        let predicate = self.resolve_vars_if_possible(predicate);
+        let goal = self.resolve_vars_if_possible(goal);
+        let mut visitor = OverflowGoalChain { span, predicates: vec![] };
+        let _ = self.visit_proof_tree(goal, &mut visitor);
         tcx.emit_node_span_lint(
             rustc_session::lint::builtin::RECURSION_DEPTH_EXCEEDING_LIMIT,
             CRATE_HIR_ID,
             span,
             rustc_errors::DiagDecorator(|diag| {
                 // FIXME: share this with overflow error in fulfillment instead of duplicating.
-                let pred_str = {
-                    let s = predicate.to_string();
+                let pred_str = |pred: ty::Predicate<'tcx>| {
+                    let s = pred.to_string();
                     if s.len() > 50 {
                         let mut p: FmtPrinter<'_, '_> =
                             FmtPrinter::new_with_limit(tcx, Namespace::TypeNS, Limit(6));
-                        predicate.print(&mut p).unwrap();
+                        pred.print(&mut p).unwrap();
                         p.into_buffer()
                     } else {
                         s
                     }
                 };
                 diag.primary_message(format!(
-                    "overflow evaluating the requirement `{pred_str}`",
+                    "overflow evaluating the requirement `{}`",
+                    pred_str(goal.predicate)
                 ));
+                for p in visitor.predicates {
+                    diag.note(format!("nested goal: {}", pred_str(p)));
+                }
                 diag.help(format!(
                     "consider increasing the recursion limit by adding a \
                      `#![recursion_limit = \"{}\"]` attribute to your crate (`{}`)",
@@ -511,5 +520,47 @@ impl<'tcx> rustc_next_trait_solver::delegate::SolverDelegate for SolverDelegate<
                 diag.note("this lint is attached to the whole crate and can't be disabled on a per-function basis");
             }),
         )
+    }
+}
+
+struct OverflowGoalChain<'tcx> {
+    span: Span,
+    predicates: Vec<ty::Predicate<'tcx>>,
+}
+
+impl<'tcx> ProofTreeVisitor<'tcx> for OverflowGoalChain<'tcx> {
+    type Result = ControlFlow<()>;
+
+    fn span(&self) -> Span {
+        self.span
+    }
+
+    fn visit_goal(&mut self, goal: &inspect::InspectGoal<'_, 'tcx>) -> Self::Result {
+        self.predicates.push(goal.goal().predicate);
+        match goal.result() {
+            Ok(Certainty::Yes) => unreachable!(),
+            Ok(Certainty::Maybe(MaybeInfo { cause: MaybeCause::Ambiguity, .. })) => unreachable!(),
+            Err(NoSolution) => {
+                unreachable!()
+            }
+            Ok(Certainty::Maybe(MaybeInfo { cause: MaybeCause::Overflow { .. }, .. })) => {
+                if let Some(cand) = goal.unique_applicable_candidate() {
+                    goal.infcx().probe(|_| {
+                        if let Some(nested_goal_with_largest_required_depth) = cand
+                            .instantiate_nested_goals(self.span)
+                            .into_iter()
+                            .max_by_key(|g| g.required_depth())
+                        {
+                            let _ = nested_goal_with_largest_required_depth.visit_with(self);
+                        }
+                    })
+                }
+            }
+        }
+        ControlFlow::Break(())
+    }
+
+    fn on_recursion_limit(&mut self) -> Self::Result {
+        ControlFlow::Break(())
     }
 }
