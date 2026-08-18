@@ -52,6 +52,7 @@ pub struct GoalEvaluation<I: Interner> {
     pub orig_values: ThinVec<I::GenericArg>,
     pub final_revision: I::Probe,
     pub result: QueryResult<I>,
+    pub required_depth: usize,
 }
 
 /// A self-contained computation during trait solving. This either

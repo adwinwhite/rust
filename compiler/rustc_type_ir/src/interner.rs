@@ -468,7 +468,7 @@ pub trait Interner:
         self,
         canonical_goal: CanonicalInput<Self>,
         root_depth: usize,
-    ) -> (QueryResult<Self>, Self::Probe);
+    ) -> (QueryResult<Self>, Self::Probe, usize);
 
     fn item_name(self, item_index: Self::DefId) -> Self::Symbol;
 

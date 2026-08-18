@@ -676,7 +676,7 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
         self,
         canonical_goal: CanonicalInput<'tcx>,
         root_depth: usize,
-    ) -> (QueryResult<'tcx>, &'tcx inspect::Probe<TyCtxt<'tcx>>) {
+    ) -> (QueryResult<'tcx>, &'tcx inspect::Probe<TyCtxt<'tcx>>, usize) {
         self.evaluate_root_goal_for_proof_tree_raw((canonical_goal, root_depth))
     }
 

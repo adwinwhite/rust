@@ -750,7 +750,7 @@ impl<D: Delegate<Cx = X>, X: Cx> SearchGraph<D> {
         root_depth: usize,
         input: X::Input,
         inspect: &mut D::ProofTreeBuilder,
-    ) -> X::Result {
+    ) -> (X::Result, usize) {
         let mut this = SearchGraph::<D>::new(root_depth);
         let available_depth = AvailableDepth(root_depth);
         let step_kind_from_parent = PathKind::Inductive; // is never used
@@ -767,7 +767,7 @@ impl<D: Delegate<Cx = X>, X: Cx> SearchGraph<D> {
             nested_goals: Default::default(),
         });
         let evaluation_result = this.evaluate_goal_in_task(cx, input, inspect);
-        evaluation_result.result
+        (evaluation_result.result, evaluation_result.required_depth)
     }
 
     /// Probably the most involved method of the whole solver.

@@ -30,7 +30,10 @@ pub struct InspectConfig {
 
 pub struct InspectGoal<'a, 'tcx> {
     infcx: &'a SolverDelegate<'tcx>,
+    // Record how deep we are in nested goals from the root goal.
     depth: usize,
+    // Required depth to complete the evaluation of this goal.
+    required_depth: usize,
     orig_values: ThinVec<ty::GenericArg<'tcx>>,
     goal: Goal<'tcx, ty::Predicate<'tcx>>,
     result: Result<Certainty, NoSolution>,
@@ -215,6 +218,10 @@ impl<'a, 'tcx> InspectGoal<'a, 'tcx> {
         self.depth
     }
 
+    pub fn required_depth(&self) -> usize {
+        self.required_depth
+    }
+
     pub fn orig_values(&self) -> &[ty::GenericArg<'tcx>] {
         &self.orig_values
     }
@@ -321,8 +328,13 @@ impl<'a, 'tcx> InspectGoal<'a, 'tcx> {
     ) -> Self {
         let infcx = <&SolverDelegate<'tcx>>::from(infcx);
 
-        let inspect::GoalEvaluation { uncanonicalized_goal, orig_values, final_revision, result } =
-            root;
+        let inspect::GoalEvaluation {
+            uncanonicalized_goal,
+            orig_values,
+            final_revision,
+            result,
+            required_depth,
+        } = root;
         // If there's a normalizes-to goal, AND the evaluation result with the result of
         // constraining the normalizes-to RHS and computing the nested goals.
         let result = result.map(|ok| ok.value.certainty);
@@ -335,6 +347,7 @@ impl<'a, 'tcx> InspectGoal<'a, 'tcx> {
             result,
             final_revision,
             source,
+            required_depth,
         }
     }
 
