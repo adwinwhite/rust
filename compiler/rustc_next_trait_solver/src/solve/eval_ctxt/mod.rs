@@ -207,6 +207,7 @@ pub trait SolverDelegateEvalExt: SolverDelegate {
         &self,
         goal: Goal<Self::Interner, <Self::Interner as Interner>::Predicate>,
         span: <Self::Interner as Interner>::Span,
+        emit_fcw: bool,
     ) -> (
         Result<NestedNormalizationGoals<Self::Interner>, NoSolution>,
         inspect::GoalEvaluation<Self::Interner>,
@@ -301,15 +302,18 @@ where
         &self,
         goal: Goal<I, I::Predicate>,
         span: I::Span,
+        emit_fcw: bool,
     ) -> (Result<NestedNormalizationGoals<I>, NoSolution>, inspect::GoalEvaluation<I>) {
         let mut result =
             evaluate_root_goal_for_proof_tree(self, goal, span, self.cx().recursion_limit());
-        maybe_evaluate_root_goal_for_proof_tree_with_higher_recursion_limit(
-            self,
-            goal,
-            span,
-            &mut result,
-        );
+        if emit_fcw {
+            maybe_evaluate_root_goal_for_proof_tree_with_higher_recursion_limit(
+                self,
+                goal,
+                span,
+                &mut result,
+            );
+        }
         result
     }
 }

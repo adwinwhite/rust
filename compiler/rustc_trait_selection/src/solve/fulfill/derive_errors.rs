@@ -268,6 +268,7 @@ impl<'tcx> BestObligation<'tcx> {
                 GoalSource::Misc,
                 obligation.as_goal(),
                 self.span(),
+                true,
             );
             // Skip nested goals that aren't the *reason* for our goal's failure.
             match (self.consider_ambiguities, nested_goal.result()) {

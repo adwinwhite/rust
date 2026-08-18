@@ -28,7 +28,7 @@ use rustc_span::{DUMMY_SP, Span};
 use thin_vec::{ThinVec, thin_vec};
 
 use super::inspect::InferCtxtProofTreeExt;
-use crate::solve::inspect::{self, ProofTreeVisitor};
+use crate::solve::inspect::{self, InspectConfig, ProofTreeVisitor};
 use crate::traits::{EvaluateConstErr, ObligationCause, sizedness_fast_path, specialization_graph};
 
 #[repr(transparent)]
@@ -535,26 +535,25 @@ impl<'tcx> ProofTreeVisitor<'tcx> for OverflowGoalChain<'tcx> {
         self.span
     }
 
+    fn config(&self) -> InspectConfig {
+        InspectConfig { max_depth: 10, emit_fcw: false }
+    }
+
     fn visit_goal(&mut self, goal: &inspect::InspectGoal<'_, 'tcx>) -> Self::Result {
         self.predicates.push(goal.goal().predicate);
-        match goal.result() {
-            Ok(Certainty::Yes) => unreachable!(),
-            Ok(Certainty::Maybe(MaybeInfo { cause: MaybeCause::Ambiguity, .. })) => unreachable!(),
-            Err(NoSolution) => {
-                unreachable!()
-            }
-            Ok(Certainty::Maybe(MaybeInfo { cause: MaybeCause::Overflow { .. }, .. })) => {
-                if let Some(cand) = goal.unique_applicable_candidate() {
-                    goal.infcx().probe(|_| {
-                        if let Some(nested_goal_with_largest_required_depth) = cand
-                            .instantiate_nested_goals(self.span)
-                            .into_iter()
-                            .max_by_key(|g| g.required_depth())
-                        {
-                            let _ = nested_goal_with_largest_required_depth.visit_with(self);
-                        }
-                    })
-                }
+        if let Ok(Certainty::Maybe(MaybeInfo { cause: MaybeCause::Overflow { .. }, .. })) =
+            goal.result()
+        {
+            if let Some(cand) = goal.unique_applicable_candidate() {
+                goal.infcx().probe(|_| {
+                    if let Some(nested_goal_with_largest_required_depth) = cand
+                        .instantiate_nested_goals(self.span)
+                        .into_iter()
+                        .max_by_key(|g| g.required_depth())
+                    {
+                        let _ = nested_goal_with_largest_required_depth.visit_with(self);
+                    }
+                })
             }
         }
         ControlFlow::Break(())

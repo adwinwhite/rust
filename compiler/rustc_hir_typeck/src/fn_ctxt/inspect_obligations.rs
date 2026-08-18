@@ -231,7 +231,7 @@ impl<'tcx> ProofTreeVisitor<'tcx> for NestedObligationsForSelfTy<'_, 'tcx> {
     }
 
     fn config(&self) -> InspectConfig {
-        InspectConfig { max_depth: MAX_DEPTH_FOR_OBLIGATIONS_VISITORS }
+        InspectConfig { max_depth: MAX_DEPTH_FOR_OBLIGATIONS_VISITORS, ..Default::default() }
     }
 
     fn visit_goal(&mut self, inspect_goal: &InspectGoal<'_, 'tcx>) {
@@ -287,7 +287,7 @@ impl<'tcx> ProofTreeVisitor<'tcx> for FindFromFloatForF32RootVids<'_, 'tcx> {
     }
 
     fn config(&self) -> InspectConfig {
-        InspectConfig { max_depth: MAX_DEPTH_FOR_OBLIGATIONS_VISITORS }
+        InspectConfig { max_depth: MAX_DEPTH_FOR_OBLIGATIONS_VISITORS, ..Default::default() }
     }
 
     fn visit_goal(&mut self, inspect_goal: &InspectGoal<'_, 'tcx>) {

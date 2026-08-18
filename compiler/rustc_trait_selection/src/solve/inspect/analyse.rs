@@ -26,6 +26,13 @@ use crate::solve::delegate::SolverDelegate;
 
 pub struct InspectConfig {
     pub max_depth: usize,
+    pub emit_fcw: bool,
+}
+
+impl Default for InspectConfig {
+    fn default() -> InspectConfig {
+        InspectConfig { max_depth: 10, emit_fcw: true }
+    }
 }
 
 pub struct InspectGoal<'a, 'tcx> {
@@ -118,7 +125,38 @@ impl<'a, 'tcx> InspectCandidate<'a, 'tcx> {
 
         instantiated_goals
             .into_iter()
-            .map(|(source, goal)| self.instantiate_proof_tree_for_nested_goal(source, goal, span))
+            .map(|(source, goal)| {
+                self.instantiate_proof_tree_for_nested_goal(source, goal, span, true)
+            })
+            .collect()
+    }
+
+    pub fn instantiate_nested_goals_without_fcw(&self, span: Span) -> Vec<InspectGoal<'a, 'tcx>> {
+        let infcx = self.goal.infcx;
+        let param_env = self.goal.goal.param_env;
+        let mut orig_values = self.goal.orig_values.clone();
+
+        let mut instantiated_goals = vec![];
+        for step in &self.steps {
+            match **step {
+                inspect::ProbeStep::AddGoal(source, goal) => instantiated_goals.push((
+                    source,
+                    instantiate_canonical_state(infcx, span, param_env, &mut orig_values, goal),
+                )),
+                inspect::ProbeStep::RecordImplArgs { .. } => {}
+                inspect::ProbeStep::MakeCanonicalResponse { .. }
+                | inspect::ProbeStep::NestedProbe(_) => unreachable!(),
+            }
+        }
+
+        let () =
+            instantiate_canonical_state(infcx, span, param_env, &mut orig_values, self.final_state);
+
+        instantiated_goals
+            .into_iter()
+            .map(|(source, goal)| {
+                self.instantiate_proof_tree_for_nested_goal(source, goal, span, false)
+            })
             .collect()
     }
 
@@ -170,6 +208,7 @@ impl<'a, 'tcx> InspectCandidate<'a, 'tcx> {
         source: GoalSource,
         goal: Goal<'tcx, ty::Predicate<'tcx>>,
         span: Span,
+        emit_fcw: bool,
     ) -> InspectGoal<'a, 'tcx> {
         let infcx = self.goal.infcx;
         match goal.predicate.kind().no_bound_vars() {
@@ -183,8 +222,8 @@ impl<'a, 'tcx> InspectCandidate<'a, 'tcx> {
                 // into another candidate who ends up with different inference
                 // constraints, we get an ICE if we already applied the constraints
                 // from the chosen candidate.
-                let proof_tree =
-                    infcx.probe(|_| infcx.evaluate_root_goal_for_proof_tree(goal, span).1);
+                let proof_tree = infcx
+                    .probe(|_| infcx.evaluate_root_goal_for_proof_tree(goal, span, emit_fcw).1);
                 InspectGoal::new(infcx, self.goal.depth + 1, proof_tree, source)
             }
         }
@@ -368,7 +407,7 @@ pub trait ProofTreeVisitor<'tcx> {
     fn span(&self) -> Span;
 
     fn config(&self) -> InspectConfig {
-        InspectConfig { max_depth: 10 }
+        Default::default()
     }
 
     fn visit_goal(&mut self, goal: &InspectGoal<'_, 'tcx>) -> Self::Result;
@@ -395,7 +434,7 @@ impl<'tcx> InferCtxt<'tcx> {
         visitor: &mut V,
     ) -> V::Result {
         let (_, proof_tree) = <&SolverDelegate<'tcx>>::from(self)
-            .evaluate_root_goal_for_proof_tree(goal, visitor.span());
+            .evaluate_root_goal_for_proof_tree(goal, visitor.span(), visitor.config().emit_fcw);
         visitor.visit_goal(&InspectGoal::new(self, depth, proof_tree, GoalSource::Misc))
     }
 }
