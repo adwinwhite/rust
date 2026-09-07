@@ -124,7 +124,7 @@ where
             use rustc_type_ir::region_constraint::{LeafRegionConstraint, RegionConstraint};
 
             let constraint =
-                RegionConstraint::new_leaf(LeafRegionConstraint::RegionOutlives(a, b, ()));
+                RegionConstraint::new_leaf(LeafRegionConstraint::RegionOutlives(a, b), ());
             self.register_solver_region_constraint(constraint);
         } else {
             self.register_region_outlives(a, b, VisibleForLeakCheck::Yes);

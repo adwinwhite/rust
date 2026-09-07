@@ -7,8 +7,8 @@ fn canonicalization_preserves_only_one_ambiguity() {
     let first = Span::with_root_ctxt(BytePos(1), BytePos(2));
     let second = Span::with_root_ctxt(BytePos(3), BytePos(4));
 
-    let first = LeafRegionConstraint::Ambiguity::<TyCtxt<'_>, _>(first);
-    let second = LeafRegionConstraint::Ambiguity::<TyCtxt<'_>, _>(second);
+    let first = LeafRegionConstraint::Ambiguity::<TyCtxt<'_>>(first);
+    let second = LeafRegionConstraint::Ambiguity::<TyCtxt<'_>>(second);
 
     let c = And::new([first.clone(), second.clone()]);
     assert_eq!(c.0.len(), 1);

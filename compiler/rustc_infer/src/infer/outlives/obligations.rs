@@ -276,7 +276,7 @@ impl<'tcx> InferCtxt<'tcx> {
         debug!(?constraint);
 
         // FIXME(-Zassumptions-on-binders): actually implement OR as an  OR
-        for c in constraint.and_constraint.0.into_iter().chain(
+        for (c, span) in constraint.and_constraint.0.into_iter().chain(
             constraint
                 .or_constraint
                 .0
@@ -286,7 +286,7 @@ impl<'tcx> InferCtxt<'tcx> {
             use LeafRegionConstraint::*;
 
             match c {
-                Ambiguity(span) => {
+                Ambiguity => {
                     self.dcx()
                         .struct_span_err(
                             span,
@@ -294,7 +294,7 @@ impl<'tcx> InferCtxt<'tcx> {
                         )
                         .emit();
                 }
-                RegionOutlives(a, b, span) => {
+                RegionOutlives(a, b) => {
                     let origin = SubregionOrigin::SolverRegionConstraint(span);
                     let category = origin.to_constraint_category();
                     conversion.push_sub_region_constraint(

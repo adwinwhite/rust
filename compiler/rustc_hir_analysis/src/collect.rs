@@ -451,9 +451,10 @@ impl<'tcx> ItemCtxt<'tcx> {
                 let span = lhs.ident.span.to(rhs.ident.span);
                 let lhs = self.lowerer().lower_lifetime(lhs, RegionInferReason::RegionPredicate);
                 let rhs = self.lowerer().lower_lifetime(rhs, RegionInferReason::RegionPredicate);
-                SolverRegionConstraint::new_leaf(LeafRegionConstraint::RegionOutlives(
-                    lhs, rhs, span,
-                ))
+                SolverRegionConstraint::new_leaf(
+                    LeafRegionConstraint::RegionOutlives(lhs, rhs),
+                    span,
+                )
             }
             hir::TestBinderConstraint::PlaceholderOutlives { lhs, rhs } => {
                 let span = lhs.span.to(rhs.ident.span);
@@ -462,9 +463,10 @@ impl<'tcx> ItemCtxt<'tcx> {
                 // note that we cannot check that lhs is a placeholder at this moment, as at this
                 // point it is a bound variable that is not yet instantiated with a placeholder.
                 // instead, we check it when we emit the region constraint.
-                SolverRegionConstraint::new_leaf(LeafRegionConstraint::PlaceholderTyOutlives(
-                    lhs, rhs, span,
-                ))
+                SolverRegionConstraint::new_leaf(
+                    LeafRegionConstraint::PlaceholderTyOutlives(lhs, rhs),
+                    span,
+                )
             }
             hir::TestBinderConstraint::AliasOutlives {
                 bound_type_constraint:

@@ -2365,12 +2365,12 @@ impl<'tcx> WfCheckingCtxt<'_, 'tcx> {
             let mut r = Ok(());
 
             let mut validate_and = |and: &And<TyCtxt<'_>, _>| {
-                for c in and.0.iter() {
+                for (c, span) in and.0.iter() {
                     match c {
-                        LeafRegionConstraint::Ambiguity(_)
+                        LeafRegionConstraint::Ambiguity
                         | LeafRegionConstraint::RegionOutlives(..)
                         | LeafRegionConstraint::AliasTyOutlivesViaEnv(..) => (), // OK
-                        LeafRegionConstraint::PlaceholderTyOutlives(ty, _, span) => {
+                        LeafRegionConstraint::PlaceholderTyOutlives(ty, _) => {
                             // we can't check this during lowering, because the ty is a ty::Bound that gets
                             // instantiated with a placeholder when entering the containing forall.
                             if let ty::Placeholder(_) | ty::Param(_) = ty.kind() {
@@ -2439,27 +2439,34 @@ impl<'tcx> WfCheckingCtxt<'_, 'tcx> {
             actual: impl std::fmt::Debug,
         ) {
             let mut err = tcx.dcx().struct_span_err(expected_span, "forall expect clause failed");
-            if let Some(actual_span) = actual_span {
+            let actual_span_str = if let Some(actual_span) = actual_span {
                 err.span_note(actual_span, "constraint from here");
-            }
-            err.note(format!("expected: {expected:#?}"));
-            err.note(format!("actual: {actual:#?}"));
+                format!("{actual_span:#?}")
+            } else {
+                String::new()
+            };
+            err.note(format!("expected: {expected:#?}, {expected_span:#?}"));
+            err.note(format!("actual: {actual:#?}, {actual_span_str}"));
             err.emit();
         }
 
         let span_of_and = |c: &And<_, _>| {
-            c.0.iter().map(|leaf| leaf.span()).reduce(|span: Span, acc| acc.to(span))
+            c.0.iter()
+                .map(|(_, span): &(LeafRegionConstraint<_>, Span)| span.clone())
+                .reduce(|span: Span, acc: Span| acc.to(span))
         };
 
         let span_of_or = |c: &Or<_, _>| {
             c.0.iter().flat_map(|and| span_of_and(and)).reduce(|span, acc| acc.to(span))
         };
 
-        let check_leaf_constraint =
-            |expected: LeafRegionConstraint<_, _>, actual: LeafRegionConstraint<_, _>| {
-                if let LeafRegionConstraint::AliasTyOutlivesViaEnv(expected, expected_span) =
+            let check_leaf_constraint = |expected: LeafRegionConstraint<_>,
+                                     expected_span: Span,
+                                     actual: LeafRegionConstraint<_>,
+                                     actual_span: Span| {
+                if let LeafRegionConstraint::AliasTyOutlivesViaEnv(expected) =
                     expected
-                    && let LeafRegionConstraint::AliasTyOutlivesViaEnv(actual, actual_span) = actual
+                    && let LeafRegionConstraint::AliasTyOutlivesViaEnv(actual) = actual
                 {
                     let expected_anon = self.tcx().anonymize_bound_vars(expected);
                     let actual_anon = self.tcx().anonymize_bound_vars(actual);
@@ -2475,8 +2482,8 @@ impl<'tcx> WfCheckingCtxt<'_, 'tcx> {
                         err.note(format!("actual_anon: {actual_anon:#?}"));
                         err.emit();
                     }
-                } else if expected.clone().without_span() != actual.clone().without_span() {
-                    err(self.tcx(), expected.span(), expected, Some(actual.span()), actual);
+                } else if expected != actual {
+                    err(self.tcx(), expected_span, expected, Some(actual_span), actual);
                 }
             };
 
@@ -2490,8 +2497,10 @@ impl<'tcx> WfCheckingCtxt<'_, 'tcx> {
                     actual,
                 )
             } else {
-                for (expected, actual) in expected.0.into_iter().zip(actual.0.into_iter()) {
-                    check_leaf_constraint(expected, actual);
+                for ((expected, expected_span), (actual, actual_span)) in
+                    expected.0.into_iter().zip(actual.0.into_iter())
+                {
+                    check_leaf_constraint(expected, expected_span, actual, actual_span);
                 }
             }
         };
