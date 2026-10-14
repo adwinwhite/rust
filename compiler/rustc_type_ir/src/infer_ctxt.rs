@@ -537,6 +537,12 @@ pub trait InferCtxtLike: Sized {
         span: <Self::Interner as Interner>::Span,
     );
 
+    fn register_solver_leaf_region_constraint(
+        &self,
+        c: crate::region_constraint::LeafRegionConstraint<Self::Interner>,
+        span: <Self::Interner as Interner>::Span,
+    );
+
     fn register_ty_outlives(
         &self,
         ty: <Self::Interner as Interner>::Ty,

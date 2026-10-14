@@ -134,7 +134,10 @@ where
             span,
         ),
         ExternalRegionConstraints::NextGen(r) => {
-            delegate.register_solver_region_constraint(r.clone(), span)
+            delegate.register_solver_region_constraint(r.clone(), span);
+            for leaf in r.and_constraint.0.clone().into_iter() {
+                delegate.register_solver_leaf_region_constraint(leaf, span);
+            }
         }
     };
     register_new_opaque_types(delegate, opaque_types, span);

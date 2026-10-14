@@ -154,9 +154,11 @@ where
         if self.cx().assumptions_on_binders() {
             use rustc_type_ir::region_constraint::{LeafRegionConstraint, RegionConstraint};
 
-            let constraint =
-                RegionConstraint::new_leaf(LeafRegionConstraint::RegionOutlives(a, b, ()));
-            self.register_solver_region_constraint(constraint);
+            let leaf_constraint = LeafRegionConstraint::RegionOutlives(a, b, ());
+            self.register_solver_region_constraint(RegionConstraint::new_leaf(
+                leaf_constraint.clone(),
+            ));
+            self.register_solver_leaf_region_constraint(leaf_constraint);
         } else {
             self.register_region_outlives(a, b, VisibleForLeakCheck::Yes);
         }

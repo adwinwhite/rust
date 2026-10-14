@@ -334,6 +334,14 @@ impl<'tcx> rustc_type_ir::InferCtxtLike for InferCtxt<'tcx> {
         self.register_solver_region_constraint(c.with_spans(span));
     }
 
+    fn register_solver_leaf_region_constraint(
+        &self,
+        c: rustc_type_ir::region_constraint::LeafRegionConstraint<TyCtxt<'tcx>>,
+        span: Span,
+    ) {
+        self.register_solver_leaf_region_constraint(c.with_span(span));
+    }
+
     fn register_ty_outlives(&self, ty: Ty<'tcx>, r: ty::Region<'tcx>, span: Span) {
         self.register_type_outlives_constraint(ty, r, &ObligationCause::dummy_with_span(span));
     }

@@ -65,8 +65,8 @@ mod solver_region_constraints;
 mod type_variable;
 mod unify_key;
 
-pub use solver_region_constraints::SolverRegionConstraint;
 use solver_region_constraints::SolverRegionConstraintStorage;
+pub use solver_region_constraints::{SolverLeafRegionConstraint, SolverRegionConstraint};
 
 /// `InferOk<'tcx, ()>` is used a lot. It may seem like a useless wrapper
 /// around `PredicateObligations<'tcx>`, but it has one important property:

@@ -5,7 +5,7 @@ use std::ops::ControlFlow;
 use rustc_macros::StableHash;
 use rustc_type_ir::data_structures::HashSet;
 use rustc_type_ir::inherent::*;
-use rustc_type_ir::region_constraint::RegionConstraint;
+use rustc_type_ir::region_constraint::{LeafRegionConstraint, RegionConstraint};
 use rustc_type_ir::relate::Relate;
 use rustc_type_ir::relate::solver_relating::RelateExt;
 use rustc_type_ir::search_graph::{
@@ -1420,6 +1420,10 @@ where
 
     pub(super) fn register_solver_region_constraint(&self, c: RegionConstraint<I>) {
         self.delegate.register_solver_region_constraint(c, self.origin_span);
+    }
+
+    pub(super) fn register_solver_leaf_region_constraint(&self, c: LeafRegionConstraint<I>) {
+        self.delegate.register_solver_leaf_region_constraint(c, self.origin_span);
     }
 
     pub(super) fn register_ty_outlives(&self, ty: I::Ty, lt: Region<I>) {

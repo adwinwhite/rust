@@ -29,6 +29,7 @@ pub(crate) enum UndoLog<'tcx> {
     ProjectionCache(traits::UndoLog<'tcx>),
     PushTypeOutlivesConstraint,
     OverwriteSolverRegionConstraint { old_constraint: SolverRegionConstraint<'tcx> },
+    SolverLeafRegionConstraint,
     PushRegionAssumption,
     PushHirTypeckPotentiallyRegionDependentGoal,
 }
@@ -80,6 +81,14 @@ impl<'tcx> Rollback<UndoLog<'tcx>> for InferCtxtInner<'tcx> {
             UndoLog::ProjectionCache(undo) => self.projection_cache.reverse(undo),
             UndoLog::OverwriteSolverRegionConstraint { old_constraint } => {
                 self.solver_region_constraint_storage.overwrite(old_constraint);
+            }
+            UndoLog::SolverLeafRegionConstraint => {
+                let popped = self.solver_region_constraint_storage.pop_leaf();
+                assert_matches!(
+                    popped,
+                    Some(_),
+                    "pushed leaf region constraint but could not pop it"
+                );
             }
             UndoLog::PushTypeOutlivesConstraint => {
                 let popped = self.region_obligations.pop();
