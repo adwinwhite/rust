@@ -45,7 +45,7 @@ pub(super) fn build_custom_mir<'tcx>(
         basic_blocks: BasicBlocks::new(IndexVec::new()),
         source: MirSource::item(did),
         phase: MirPhase::Built,
-        typing_mode: BodyTypingMode::Borrowck,
+        typing_mode: BodyTypingMode::PostTypeckThroughBorrowck,
         source_scopes: IndexVec::new(),
         coroutine: None,
         local_decls: IndexVec::new(),
