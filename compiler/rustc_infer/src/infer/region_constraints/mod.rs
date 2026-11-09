@@ -85,6 +85,8 @@ pub struct RegionConstraintData<'tcx> {
 
 pub type SolverRegionConstraint<'tcx> =
     rustc_type_ir::region_constraint::RegionConstraint<TyCtxt<'tcx>, Span>;
+pub type SolverLeafRegionConstraint<'tcx> =
+    rustc_type_ir::region_constraint::LeafRegionConstraint<TyCtxt<'tcx>, Span>;
 
 #[derive(Clone, Debug, Default)]
 pub struct SolverRegionConstraintData<'tcx>(Option<SolverRegionConstraint<'tcx>>);
@@ -100,6 +102,18 @@ impl<'tcx> SolverRegionConstraintData<'tcx> {
     #[instrument(level = "debug", skip(self))]
     pub(crate) fn overwrite(&mut self, constraint: SolverRegionConstraint<'tcx>) {
         self.0 = Some(constraint);
+    }
+
+    pub(crate) fn add_leaf_constraint(
+        &mut self,
+        leaf_constraint: SolverLeafRegionConstraint<'tcx>,
+    ) {
+        let c = self.0.get_or_insert_with(|| SolverRegionConstraint::new_true());
+        c.and_constraint = rustc_type_ir::region_constraint::And::new(c.and_constraint.0.into_iter().chain(leaf_constraint));
+    }
+
+    pub(crate) fn pop_leaf_constraint(&mut self) -> Option<SolverLeafRegionConstraint<'tcx>> {
+        self.0.and_then(|c| c.and_constraint.0.pop())
     }
 
     pub(crate) fn leafs_len(&self) -> usize {
@@ -487,30 +501,29 @@ impl<'tcx> RegionConstraintCollector<'_, 'tcx> {
             "solver region constraint has escaping bound vars, which is indicative of a bug in how constraints are handled: {constraint:?}",
         );
 
-        // FIXME(-Zassumptions-on-binders): We don't actually register leaf constraints in
-        // `or_constraint`. This is a problem for complete incremental undo log.
-        //
-        // Currently it's only used for snapshot based leak check. Therefore, we can get away with
-        // ignoring `Or` constraint since region constraints from type outlives aren't visible for
-        // leak check.
-        for leaf in constraint.and_constraint.0.clone().into_iter() {
-            debug!("RegionConstraintCollector: add_solver_leaf_region_constraint({:?})", leaf);
-            let index = self.storage.solver_data.leafs_len();
-            self.undo_log.push(AddSolverLeafRegionConstraint(index));
+        if constraint.or_constraint.is_true() {
+            for leaf in constraint.and_constraint.0.into_iter() {
+                debug!("RegionConstraintCollector: add_solver_leaf_region_constraint({:?})", leaf);
+                let index = self.storage.solver_data.leafs_len();
+                self.undo_log.push(AddSolverLeafRegionConstraint(index));
+                self.storage.solver_data.add_leaf_constraint(leaf);
+            }
+        } else {
+            // FIXME(-Zassumptions-on-binders): We should assert that the overwrite log is not used
+            // under `min_coroutine`.
+            let old_constraint = self.storage.solver_data.get_constraint();
+            let new_constraint = rustc_type_ir::region_constraint::RegionConstraint::build_and(
+                old_constraint.clone(),
+                constraint,
+            );
+
+            // FIXME(-Zassumptions-on-binders): This is pretty bad for perf, we don't make incremental
+            // changes to the region constraints, instead we just rewrite the entire thing every time
+            // and store the old version.
+            self.undo_log
+                .push(OverwriteSolverRegionConstraint { old_constraint: Box::new(old_constraint) });
+            self.storage.solver_data.overwrite(new_constraint);
         }
-
-        let old_constraint = self.storage.solver_data.get_constraint();
-        let new_constraint = rustc_type_ir::region_constraint::RegionConstraint::build_and(
-            old_constraint.clone(),
-            constraint,
-        );
-
-        // FIXME(-Zassumptions-on-binders): This is pretty bad for perf, we don't make incremental
-        // changes to the region constraints, instead we just rewrite the entire thing every time
-        // and store the old version.
-        self.undo_log
-            .push(OverwriteSolverRegionConstraint { old_constraint: Box::new(old_constraint) });
-        self.storage.solver_data.overwrite(new_constraint);
     }
 
     pub(super) fn start_snapshot(&self) -> RegionSnapshot {
@@ -965,9 +978,9 @@ impl<'tcx> Rollback<UndoLog<'tcx>> for RegionConstraintStorage<'tcx> {
             OverwriteSolverRegionConstraint { old_constraint } => {
                 self.solver_data.overwrite(*old_constraint);
             }
-            AddSolverLeafRegionConstraint(_) => {
-                // Nothing to do.
-                // The storage is restored via `OverwriteSolverRegionConstraint`
+            AddSolverLeafRegionConstraint(index) => {
+                self.solver_data.pop_leaf_constraint().unwrap();
+                assert_eq!(self.solver_data.leafs_len(), index);
             }
         }
     }
